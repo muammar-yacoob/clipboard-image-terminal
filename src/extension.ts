@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { captureClipboardImage } from './lib/clipboard';
+import { errorMessage } from './lib/errors';
 
 export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
@@ -25,8 +26,7 @@ export function activate(context: vscode.ExtensionContext) {
         terminal.sendText(filePath, false);
         vscode.window.setStatusBarMessage('$(file-media) Image path pasted', 2000);
       } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : String(err);
-        vscode.window.showErrorMessage(`Clipboard image failed: ${msg}`);
+        vscode.window.showErrorMessage(`Clipboard image failed: ${errorMessage(err)}`);
       }
     })
   );

@@ -11,7 +11,7 @@
  * the same image twice is a no-op.
  */
 import { createHash } from 'node:crypto';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, type ExecFileSyncOptionsWithBufferEncoding } from 'node:child_process';
 import {
   existsSync, mkdirSync, writeFileSync, readFileSync,
   readdirSync, statSync, unlinkSync,
@@ -23,6 +23,14 @@ export const DEFAULT_OUTPUT_DIR = '/tmp/clipboard-images';
 const TIMEOUT = 8000;
 const MAX_BUFFER = 50 * 1024 * 1024;
 const MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // prune saved images after 7 days
+
+// Options for clipboard tools that stream raw image bytes to stdout (returns a Buffer).
+const BIN_OPTS: ExecFileSyncOptionsWithBufferEncoding = {
+  timeout: TIMEOUT,
+  maxBuffer: MAX_BUFFER,
+  stdio: ['ignore', 'pipe', 'ignore'],
+  encoding: 'buffer',
+};
 
 type Platform = 'wsl' | 'windows' | 'macos' | 'linux';
 
@@ -36,20 +44,27 @@ function detectPlatform(): Platform {
   return 'linux';
 }
 
+// Exit 1 (treated as "no image") on an empty clipboard or any transient
+// clipboard error — never leak a PowerShell stack trace to the user's terminal.
 const PS_READ_CLIPBOARD = `
-Add-Type -AssemblyName System.Windows.Forms
-Add-Type -AssemblyName System.Drawing
-
-if (-not [System.Windows.Forms.Clipboard]::ContainsImage()) { exit 1 }
-
-$img = [System.Windows.Forms.Clipboard]::GetImage()
+$ErrorActionPreference = 'Stop'
 try {
-  $ms = New-Object System.IO.MemoryStream
-  $img.Save($ms, [System.Drawing.Imaging.ImageFormat]::Png)
-  [Console]::Write([Convert]::ToBase64String($ms.ToArray()))
-  $ms.Dispose()
-} finally {
-  $img.Dispose()
+  Add-Type -AssemblyName System.Windows.Forms
+  Add-Type -AssemblyName System.Drawing
+
+  if (-not [System.Windows.Forms.Clipboard]::ContainsImage()) { exit 1 }
+
+  $img = [System.Windows.Forms.Clipboard]::GetImage()
+  try {
+    $ms = New-Object System.IO.MemoryStream
+    $img.Save($ms, [System.Drawing.Imaging.ImageFormat]::Png)
+    [Console]::Write([Convert]::ToBase64String($ms.ToArray()))
+    $ms.Dispose()
+  } finally {
+    $img.Dispose()
+  }
+} catch {
+  exit 1
 }
 `;
 
@@ -57,7 +72,7 @@ function readViaPowerShell(): Buffer | null {
   try {
     const b64 = execFileSync('powershell.exe', [
       '-STA', '-NoLogo', '-NoProfile', '-NonInteractive', '-Command', PS_READ_CLIPBOARD,
-    ], { encoding: 'utf8', timeout: TIMEOUT, maxBuffer: MAX_BUFFER }).trim();
+    ], { encoding: 'utf8', timeout: TIMEOUT, maxBuffer: MAX_BUFFER, stdio: ['ignore', 'pipe', 'ignore'] }).trim();
 
     return b64 ? Buffer.from(b64, 'base64') : null;
   } catch (err: unknown) {
@@ -75,10 +90,8 @@ function readViaLinux(): Buffer | null {
   let toolFound = false;
   for (const [bin, args] of attempts) {
     try {
-      const out = execFileSync(bin, args, {
-        timeout: TIMEOUT, maxBuffer: MAX_BUFFER, stdio: ['ignore', 'pipe', 'ignore'],
-      });
-      return out && out.length ? Buffer.from(out) : null;
+      const out = execFileSync(bin, args, BIN_OPTS);
+      return out.length ? out : null;
     } catch (err: unknown) {
       if ((err as { code?: string }).code !== 'ENOENT') toolFound = true; // ran but no image
     }
@@ -116,10 +129,8 @@ end run
   } catch {
     // Fallback to pngpaste if the user has it installed.
     try {
-      const out = execFileSync('pngpaste', ['-'], {
-        timeout: TIMEOUT, maxBuffer: MAX_BUFFER, stdio: ['ignore', 'pipe', 'ignore'],
-      });
-      return out && out.length ? Buffer.from(out) : null;
+      const out = execFileSync('pngpaste', ['-'], BIN_OPTS);
+      return out.length ? out : null;
     } catch {
       return null;
     }
@@ -131,7 +142,8 @@ end run
  * Returns `null` when the clipboard holds no image.
  */
 export function readClipboardImage(): Buffer | null {
-  switch (detectPlatform()) {
+  const platform = detectPlatform();
+  switch (platform) {
     case 'wsl':
     case 'windows':
       return readViaPowerShell();
@@ -139,6 +151,10 @@ export function readClipboardImage(): Buffer | null {
       return readViaMac();
     case 'linux':
       return readViaLinux();
+    default: {
+      const unreachable: never = platform; // compile error if a Platform is unhandled
+      throw new Error(`Unsupported platform: ${String(unreachable)}`);
+    }
   }
 }
 

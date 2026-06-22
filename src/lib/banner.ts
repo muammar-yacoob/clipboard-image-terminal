@@ -33,5 +33,5 @@ export function getBanner(): string {
 /** Print the banner to the console */
 export function printBanner(): void {
   console.log(getBanner());
-  console.log(fmt.dim('  Paste clipboard images as file paths — built for AI coding tools on WSL\n'));
+  console.log(fmt.dim('  Paste clipboard images as file paths — built for AI coding tools\n'));
 }

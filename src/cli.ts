@@ -4,6 +4,7 @@ import { Command } from 'commander';
 import { captureClipboardImage, DEFAULT_OUTPUT_DIR } from './lib/clipboard';
 import { showHelp } from './lib/help';
 import { fmt } from './lib/logger';
+import { errorMessage } from './lib/errors';
 
 /** Human-readable byte size, e.g. 42.0 KB. */
 function humanSize(bytes: number): string {
@@ -56,8 +57,7 @@ program
         console.error(`${fmt.green('✔')} ${fmt.bold('Image saved')}${size}`);
       }
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
-      console.error(fmt.red(`Clipboard image failed: ${msg}`));
+      console.error(fmt.red(`Clipboard image failed: ${errorMessage(err)}`));
       process.exit(1);
     }
   });
