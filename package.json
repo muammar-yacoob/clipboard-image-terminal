@@ -28,7 +28,7 @@
   "bin": {
     "clipimg": "./out/cli.js"
   },
-  "files": ["out", "src/res/icon.png", "README.md", "LICENSE"],
+  "files": ["out", "src/res/icon.png", "README.md", "CHANGELOG.md", "LICENSE"],
   "contributes": {
     "commands": [
       {
