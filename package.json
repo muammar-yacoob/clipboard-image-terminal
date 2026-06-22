@@ -67,6 +67,7 @@
   "scripts": {
     "build": "tsc",
     "watch": "tsc -w",
+    "test": "bun test",
     "package": "tsc && vsce package",
     "publish:vscode": "tsc && vsce publish",
     "publish:npm": "npm publish --access public",
