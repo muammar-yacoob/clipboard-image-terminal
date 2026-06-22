@@ -1,16 +1,18 @@
 [//]: # (Constants)
 [coffee-link]: https://buymeacoffee.com/spark88
 [website-link]: https://spark-games.co.uk
-[issues-link]: ../../issues
-[release-link]: ../../releases
-[fork-link]: ../../fork
-[license-link]: ./LICENSE
-[privacy-link]: ./PRIVACY.md
+[repo-link]: https://github.com/muammar-yacoob/clipboard-image-terminal
+[issues-link]: https://github.com/muammar-yacoob/clipboard-image-terminal/issues
+[release-link]: https://github.com/muammar-yacoob/clipboard-image-terminal/releases
+[fork-link]: https://github.com/muammar-yacoob/clipboard-image-terminal/fork
+[stars-link]: https://github.com/muammar-yacoob/clipboard-image-terminal/stargazers
+[license-link]: https://github.com/muammar-yacoob/clipboard-image-terminal/blob/main/LICENSE
+[privacy-link]: https://github.com/muammar-yacoob/clipboard-image-terminal/blob/main/PRIVACY.md
 [marketplace-link]: https://marketplace.visualstudio.com/items?itemName=muammar-yacoob.clipboard-image-terminal
 [npm-link]: https://www.npmjs.com/package/clipboard-image-terminal
 
 <div align="center">
-  <img src="src/res/icon.png" width="140" alt="Clipboard Image to Terminal logo">
+  <img src="https://raw.githubusercontent.com/muammar-yacoob/clipboard-image-terminal/main/src/res/icon.png" width="140" alt="Clipboard Image to Terminal logo">
 
   <h1>Clipboard Image to Terminal</h1>
 
@@ -21,7 +23,7 @@
   [![Installs](https://img.shields.io/visual-studio-marketplace/i/muammar-yacoob.clipboard-image-terminal?logo=visualstudiocode&logoColor=white&label=installs&color=blue)][marketplace-link]
   [![Buy Me Coffee](https://img.shields.io/badge/Buy%20Me-Coffee-green?logo=buy-me-a-coffee&logoColor=white)][coffee-link]
   [![Report Bug](https://img.shields.io/badge/Report-Bug-red?logo=github&logoColor=white)][issues-link]
-  [![GitHub Stars](https://img.shields.io/github/stars/muammar-yacoob/clipboard-image-terminal?style=social)](../../stargazers)
+  [![GitHub Stars](https://img.shields.io/github/stars/muammar-yacoob/clipboard-image-terminal?style=social)][stars-link]
 </div>
 
 ---
@@ -125,5 +127,5 @@ Devs run on [coffee][coffee-link] ☕<br>
 
 ---
 <div align="center">
-<sub>Released under <a href="./LICENSE">MIT License</a> | <a href="./PRIVACY.md">Privacy Policy</a></sub>
+<sub>Released under <a href="https://github.com/muammar-yacoob/clipboard-image-terminal/blob/main/LICENSE">MIT License</a> | <a href="https://github.com/muammar-yacoob/clipboard-image-terminal/blob/main/PRIVACY.md">Privacy Policy</a></sub>
 </div>
