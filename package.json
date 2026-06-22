@@ -1,0 +1,86 @@
+{
+  "name": "clipboard-image-terminal",
+  "displayName": "Clipboard Image to Terminal",
+  "description": "Paste clipboard images as file paths into the VS Code terminal. Built for AI coding tools on WSL.",
+  "version": "0.2.0",
+  "publisher": "muammar-yacoob",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/muammar-yacoob/clipboard-image-terminal"
+  },
+  "homepage": "https://github.com/muammar-yacoob/clipboard-image-terminal#readme",
+  "bugs": {
+    "url": "https://github.com/muammar-yacoob/clipboard-image-terminal/issues"
+  },
+  "galleryBanner": {
+    "color": "#1e9bd7",
+    "theme": "dark"
+  },
+  "engines": {
+    "vscode": "^1.85.0",
+    "node": ">=20"
+  },
+  "icon": "src/res/icon.png",
+  "categories": ["Other"],
+  "keywords": ["clipboard", "image", "terminal", "wsl", "claude", "ai", "cli"],
+  "main": "./out/extension.js",
+  "bin": {
+    "clipimg": "./out/cli.js"
+  },
+  "files": ["out", "src/res/icon.png", "README.md", "LICENSE"],
+  "contributes": {
+    "commands": [
+      {
+        "command": "clipboard-image.paste",
+        "title": "Paste Clipboard Image to Terminal",
+        "category": "Clipboard Image",
+        "icon": "$(file-media)"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "clipboard-image.paste",
+        "key": "ctrl+alt+v",
+        "when": "terminalFocus"
+      }
+    ],
+    "menus": {
+      "terminal/context": [
+        {
+          "command": "clipboard-image.paste",
+          "group": "navigation"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Clipboard Image to Terminal",
+      "properties": {
+        "clipboardImage.outputDir": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Directory to save pasted images. Leave empty to use the default (`/tmp/clipboard-images`)."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc -w",
+    "package": "tsc && vsce package",
+    "publish:vscode": "tsc && vsce publish",
+    "publish:npm": "npm publish --access public",
+    "prepublishOnly": "tsc"
+  },
+  "devDependencies": {
+    "@types/figlet": "^1.7.0",
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.85.0",
+    "@vscode/vsce": "^3.0.0",
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "commander": "^15.0.0",
+    "figlet": "^1.11.0"
+  }
+}
