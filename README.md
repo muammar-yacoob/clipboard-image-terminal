@@ -68,6 +68,7 @@ Inside VS Code, just focus the terminal and press **`Ctrl+Alt+V`** (or right-cli
 
 ## ✨ Features
 
+- **Token-saving compression** — oversized images are downscaled to a vision-token budget before saving (~66% fewer tokens on a 4K screenshot), then logged so you can see the cost of each paste
 - **Lossless PNG** — keeps screenshots of code & text crisp for vision models
 - **Cross-platform** — WSL/Windows, macOS, and Linux, each via its native clipboard tool
 - **Pipeable** — the CLI prints just the path to stdout, perfect for `$(clipimg)`
@@ -102,6 +103,10 @@ Node.js ≥ 20 (CLI only), plus a clipboard tool for your platform:
 | **WSL / Windows** | `powershell.exe` (default on all installs) |
 | **macOS** | `osascript` (built-in), or [`pngpaste`](https://github.com/jcsalterego/pngpaste) |
 | **Linux** | `wl-clipboard` (Wayland) or `xclip` (X11) |
+
+Compression uses each platform's native resizer — PowerShell on WSL/Windows, the
+built-in `sips` (or ImageMagick) on macOS, ImageMagick on Linux. If none is
+available, the image is still pasted at full size; only the token saving is skipped.
 
 ## 🛠️ Development
 

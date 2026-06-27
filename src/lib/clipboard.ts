@@ -19,10 +19,36 @@ import {
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
+import { estimateImageTokens, PATCH_PX } from './format';
+
 export const DEFAULT_OUTPUT_DIR = '/tmp/clipboard-images';
 const TIMEOUT = 8000;
 const MAX_BUFFER = 50 * 1024 * 1024;
 const MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // prune saved images after 7 days
+
+// Vision models bill by pixel area, not file size: one token per 28×28px patch.
+// We downscale to fit a visual-token budget — Anthropic's own "standard" tier
+// caps quality here and downscales anything larger anyway, so this is the most
+// tokens we can shave while staying at a resolution Claude considers sufficient.
+export const TARGET_TOKENS = 1568;
+const MAX_PIXELS = TARGET_TOKENS * PATCH_PX * PATCH_PX; // ≈1.23 MP
+
+// A high-resolution-tier model (Opus 4.7/4.8, Fable 5) charges up to this many
+// tokens for one image, downscaling beyond it. We cap the "before" estimate here
+// so reported savings reflect what an oversized paste would actually have cost.
+const HIRES_MAX_TOKENS = 4784;
+
+/** What happened while capturing — surfaced to callers so they can log it. */
+export type CaptureEvent =
+  | { type: 'compressing' }
+  | {
+      type: 'pasted';
+      width: number;
+      height: number;
+      tokens: number; // estimated vision tokens for the saved image
+      originalTokens: number; // what it would have cost uncompressed (high-res tier)
+      savedTokens: number; // originalTokens - tokens, never negative
+    };
 
 // Options for clipboard tools that stream raw image bytes to stdout (returns a Buffer).
 const BIN_OPTS: ExecFileSyncOptionsWithBufferEncoding = {
@@ -158,6 +184,102 @@ export function readClipboardImage(): Buffer | null {
   }
 }
 
+// Resize a PNG buffer to exactly w×h, keeping everything in memory (base64 over
+// stdin) so we never have to hand a Linux temp path to a Windows process.
+const PS_RESIZE = `
+$ErrorActionPreference = 'Stop'
+Add-Type -AssemblyName System.Drawing
+$bytes = [Convert]::FromBase64String([Console]::In.ReadToEnd())
+$ms = New-Object System.IO.MemoryStream(,$bytes)
+$img = [System.Drawing.Image]::FromStream($ms)
+$bmp = New-Object System.Drawing.Bitmap(__W__, __H__)
+$g = [System.Drawing.Graphics]::FromImage($bmp)
+$g.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+$g.DrawImage($img, 0, 0, __W__, __H__)
+$out = New-Object System.IO.MemoryStream
+$bmp.Save($out, [System.Drawing.Imaging.ImageFormat]::Png)
+[Console]::Write([Convert]::ToBase64String($out.ToArray()))
+`;
+
+/** Read a PNG's pixel dimensions from its IHDR header, or null if not a PNG. */
+export function pngDimensions(buf: Buffer): { width: number; height: number } | null {
+  // 8-byte signature, then IHDR: length(4) + type(4) + width(4) + height(4).
+  if (buf.length < 24 || buf.readUInt32BE(0) !== 0x89504e47) return null;
+  return { width: buf.readUInt32BE(16), height: buf.readUInt32BE(20) };
+}
+
+function resizeViaTool(buf: Buffer, w: number, h: number): Buffer {
+  const platform = detectPlatform();
+  if (platform === 'wsl' || platform === 'windows') {
+    const script = PS_RESIZE.replace(/__W__/g, String(w)).replace(/__H__/g, String(h));
+    const b64 = execFileSync('powershell.exe', [
+      '-NoLogo', '-NoProfile', '-NonInteractive', '-Command', script,
+    ], { input: buf.toString('base64'), encoding: 'utf8', timeout: TIMEOUT, maxBuffer: MAX_BUFFER, stdio: ['pipe', 'pipe', 'ignore'] }).trim();
+    return Buffer.from(b64, 'base64');
+  }
+
+  // macOS / Linux: stream PNG through ImageMagick (stdin -> stdout, no temp files).
+  for (const bin of ['magick', 'convert']) {
+    try {
+      return execFileSync(bin, ['png:-', '-resize', `${w}x${h}`, 'png:-'], {
+        input: buf, timeout: TIMEOUT, maxBuffer: MAX_BUFFER, encoding: 'buffer', stdio: ['pipe', 'pipe', 'ignore'],
+      });
+    } catch (err: unknown) {
+      if ((err as { code?: string }).code !== 'ENOENT') throw err; // tool ran but failed
+    }
+  }
+
+  // macOS ships `sips` even without ImageMagick — fall back to it (needs temp files).
+  if (detectPlatform() === 'macos') return resizeViaSips(buf, w, h);
+
+  throw new Error('No image resizing tool found (install ImageMagick)');
+}
+
+// sips can't stream, so round-trip through temp files. pid keeps concurrent
+// pastes from clobbering each other without needing a random/timestamp source.
+function resizeViaSips(buf: Buffer, w: number, h: number): Buffer {
+  const tmpIn = join(tmpdir(), `clipimg-resize-in-${process.pid}.png`);
+  const tmpOut = join(tmpdir(), `clipimg-resize-out-${process.pid}.png`);
+  try {
+    writeFileSync(tmpIn, buf);
+    // `-z height width` resamples to an exact size; our w/h already preserve aspect.
+    execFileSync('sips', ['-z', String(h), String(w), tmpIn, '--out', tmpOut], {
+      timeout: TIMEOUT, stdio: 'ignore',
+    });
+    return readFileSync(tmpOut);
+  } finally {
+    try { unlinkSync(tmpIn); } catch { /* best effort */ }
+    try { unlinkSync(tmpOut); } catch { /* best effort */ }
+  }
+}
+
+/**
+ * Downscale a clipboard PNG to fit the visual-token budget, saving tokens for
+ * vision models. Images already small enough (and anything that isn't a
+ * decodable PNG) are returned untouched. `onCompress` fires only when a resize
+ * actually happens. Any failure falls back to the original bytes.
+ */
+export function compressImage(buf: Buffer, onCompress?: () => void): Buffer {
+  const dims = pngDimensions(buf);
+  if (!dims) return buf;
+
+  const pixels = dims.width * dims.height;
+  if (pixels <= MAX_PIXELS) return buf;
+
+  // Scale area down to the budget, preserving aspect ratio.
+  const scale = Math.sqrt(MAX_PIXELS / pixels);
+  const w = Math.max(1, Math.round(dims.width * scale));
+  const h = Math.max(1, Math.round(dims.height * scale));
+
+  onCompress?.();
+  try {
+    const out = resizeViaTool(buf, w, h);
+    return out.length ? out : buf;
+  } catch {
+    return buf; // best effort — a paste with extra tokens beats no paste at all
+  }
+}
+
 /** Delete saved images older than MAX_AGE_MS so the output dir can't grow forever. */
 function pruneOldImages(outputDir: string): void {
   try {
@@ -194,8 +316,34 @@ export function saveImage(buf: Buffer, outputDir: string = DEFAULT_OUTPUT_DIR): 
  * Grab the clipboard image and persist it. Returns the saved path, or `null`
  * when there is no image on the clipboard.
  */
-export function captureClipboardImage(outputDir: string = DEFAULT_OUTPUT_DIR): string | null {
-  const buf = readClipboardImage();
-  if (!buf) return null;
-  return saveImage(buf, outputDir);
+export function captureClipboardImage(
+  outputDir: string = DEFAULT_OUTPUT_DIR,
+  onEvent?: (event: CaptureEvent) => void,
+): string | null {
+  const raw = readClipboardImage();
+  if (!raw) return null;
+
+  const finalBuf = compressImage(raw, () => onEvent?.({ type: 'compressing' }));
+  const filePath = saveImage(finalBuf, outputDir);
+
+  if (onEvent) {
+    const after = pngDimensions(finalBuf);
+    const before = pngDimensions(raw) ?? after;
+    if (after) {
+      const tokens = estimateImageTokens(after.width, after.height);
+      const originalTokens = before
+        ? Math.min(estimateImageTokens(before.width, before.height), HIRES_MAX_TOKENS)
+        : tokens;
+      onEvent({
+        type: 'pasted',
+        width: after.width,
+        height: after.height,
+        tokens,
+        originalTokens,
+        savedTokens: Math.max(0, originalTokens - tokens),
+      });
+    }
+  }
+
+  return filePath;
 }
