@@ -235,11 +235,14 @@ function resizeViaTool(buf: Buffer, w: number, h: number): Buffer {
   throw new Error('No image resizing tool found (install ImageMagick)');
 }
 
-// sips can't stream, so round-trip through temp files. pid keeps concurrent
-// pastes from clobbering each other without needing a random/timestamp source.
+// sips can't stream, so round-trip through temp files. pid + a per-call counter
+// keeps concurrent pastes (e.g. in the long-lived extension host) from clobbering
+// each other, without needing a random/timestamp source.
+let sipsTempSeq = 0;
 function resizeViaSips(buf: Buffer, w: number, h: number): Buffer {
-  const tmpIn = join(tmpdir(), `clipimg-resize-in-${process.pid}.png`);
-  const tmpOut = join(tmpdir(), `clipimg-resize-out-${process.pid}.png`);
+  const id = `${process.pid}-${sipsTempSeq++}`;
+  const tmpIn = join(tmpdir(), `clipimg-resize-in-${id}.png`);
+  const tmpOut = join(tmpdir(), `clipimg-resize-out-${id}.png`);
   try {
     writeFileSync(tmpIn, buf);
     // `-z height width` resamples to an exact size; our w/h already preserve aspect.
