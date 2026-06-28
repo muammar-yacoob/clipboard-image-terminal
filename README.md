@@ -28,46 +28,30 @@
 
 ---
 
-AI coding tools (Claude Code, Aider, etc.) can't see an image you copy until it's a file on disk — and on **WSL** the Linux side can't even read the Windows clipboard. This bridges that gap: it grabs the clipboard image, saves it as a **lossless PNG**, and hands you the file path.
+AI coding tools (Claude Code, Aider, etc.) can't see an image you copy until it's a file on disk — and on **WSL** the Linux side can't even read the Windows clipboard. Copy any image; this saves it as a PNG (auto-downscaled to save vision tokens) and hands the AI tool its path. Works on **WSL/Windows, macOS, and Linux**.
 
-Works on **WSL/Windows, macOS, and Linux**, and ships in two flavours that share one core:
+## 🚀 Get started
 
-| | What it does | Best for |
-|---|---|---|
-| 🧩 **VS Code extension** | `Ctrl+Alt+V` types the image path into the active terminal | Working inside VS Code |
-| ⌨️ **CLI** (`clipimg`) | Prints the saved image path to stdout | Any terminal / shell scripts |
+**CLI** — for any terminal or AI tool:
 
-## 📥 Installation
+```sh
+npm install -g clipboard-image-terminal
+claude "look at $(clipimg)"   # copy an image first, then run this
+```
 
-**VS Code extension**
+`clipimg` prints just the saved path to stdout (pipe-friendly). Useful flags: `-d ./shots` (custom dir), `help`.
 
-Search **"Clipboard Image to Terminal"** in the Extensions panel, or:
+**VS Code extension** — for working inside the editor:
 
 ```sh
 code --install-extension muammar-yacoob.clipboard-image-terminal
 ```
 
-**CLI**
-
-```sh
-npm install -g clipboard-image-terminal
-```
-
-## 🚀 Quick Start
-
-Copy any image, then:
-
-```sh
-clipimg                       # save clipboard image, print its path
-claude "look at $(clipimg)"   # feed the image straight to an AI tool
-clipimg -d ./shots            # save into a custom directory
-clipimg help                  # show the help screen
-```
-
-Inside VS Code, just focus the terminal and press **`Ctrl+Alt+V`** (or right-click → **Paste Clipboard Image to Terminal**).
+Focus the terminal and press **`Ctrl+Alt+V`** (or right-click → **Paste Clipboard Image to Terminal**) to type the image path into it.
 
 ## ✨ Features
 
+- **Token-saving compression** — oversized images are downscaled to a vision-token budget before saving (~66% fewer tokens on a 4K screenshot), then logged so you can see the cost of each paste
 - **Lossless PNG** — keeps screenshots of code & text crisp for vision models
 - **Cross-platform** — WSL/Windows, macOS, and Linux, each via its native clipboard tool
 - **Pipeable** — the CLI prints just the path to stdout, perfect for `$(clipimg)`
@@ -102,6 +86,10 @@ Node.js ≥ 20 (CLI only), plus a clipboard tool for your platform:
 | **WSL / Windows** | `powershell.exe` (default on all installs) |
 | **macOS** | `osascript` (built-in), or [`pngpaste`](https://github.com/jcsalterego/pngpaste) |
 | **Linux** | `wl-clipboard` (Wayland) or `xclip` (X11) |
+
+Compression uses each platform's native resizer — PowerShell on WSL/Windows, the
+built-in `sips` (or ImageMagick) on macOS, ImageMagick on Linux. If none is
+available, the image is still pasted at full size; only the token saving is skipped.
 
 ## 🛠️ Development
 

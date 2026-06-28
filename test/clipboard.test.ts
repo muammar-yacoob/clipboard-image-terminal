@@ -4,9 +4,18 @@ import {
 } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { saveImage } from '../src/lib/clipboard';
+import { saveImage, pngDimensions, compressImage } from '../src/lib/clipboard';
 
 const PNG = Buffer.from('89504e470d0a1a0a', 'hex'); // PNG magic bytes
+
+// A minimal PNG header: signature + length/type bytes + width + height.
+function pngHeader(width: number, height: number): Buffer {
+  const buf = Buffer.alloc(24);
+  Buffer.from('89504e470d0a1a0a', 'hex').copy(buf, 0);
+  buf.writeUInt32BE(width, 16);
+  buf.writeUInt32BE(height, 20);
+  return buf;
+}
 
 const dirs: string[] = [];
 function tmp(): string {
@@ -46,5 +55,37 @@ describe('saveImage', () => {
     utimesSync(old, eightDaysAgo, eightDaysAgo);
     saveImage(PNG, d); // triggers prune
     expect(existsSync(old)).toBe(false);
+  });
+});
+
+describe('pngDimensions', () => {
+  test('reads width and height from the IHDR header', () => {
+    expect(pngDimensions(pngHeader(2560, 1440))).toEqual({ width: 2560, height: 1440 });
+  });
+
+  test('returns null for non-PNG bytes', () => {
+    expect(pngDimensions(Buffer.from('ffd8ffe0', 'hex'))).toBeNull(); // JPEG magic
+  });
+});
+
+describe('compressImage', () => {
+  test('leaves images within the token budget untouched and stays quiet', () => {
+    const small = pngHeader(800, 600); // 0.48 MP, under the ~1.23 MP budget
+    let compressed = false;
+    expect(compressImage(small, () => { compressed = true; })).toBe(small);
+    expect(compressed).toBe(false);
+  });
+
+  test('leaves undecodable bytes untouched', () => {
+    expect(compressImage(PNG)).toBe(PNG);
+  });
+
+  test('signals compression once when an oversized image is resized', () => {
+    const big = pngHeader(4000, 3000); // 12 MP, header only, no pixels
+    let calls = 0;
+    // Resizing fails on a headers-only PNG, so it falls back to the original
+    // buffer — but the compression signal must still fire exactly once.
+    compressImage(big, () => { calls += 1; });
+    expect(calls).toBe(1);
   });
 });

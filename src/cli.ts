@@ -1,11 +1,9 @@
 #!/usr/bin/env node
-import { statSync } from 'node:fs';
 import { Command } from 'commander';
 import { captureClipboardImage, DEFAULT_OUTPUT_DIR } from './lib/clipboard';
 import { showHelp } from './lib/help';
 import { fmt } from './lib/logger';
 import { errorMessage } from './lib/errors';
-import { humanSize } from './lib/format';
 
 // out/cli.js sits one level below package.json
 function getVersion(): string {
@@ -32,21 +30,28 @@ program
   .option('-d, --dir <path>', 'output directory', DEFAULT_OUTPUT_DIR)
   .action((opts: { dir: string }) => {
     try {
-      const filePath = captureClipboardImage(opts.dir);
+      // All logging goes to stderr so stdout stays clean for `claude "$(clipimg)"`.
+      const filePath = captureClipboardImage(opts.dir, (event) => {
+        if (event.type === 'compressing') {
+          console.error(fmt.cyan('[compressing image...]'));
+          return;
+        }
+        let saved = '';
+        if (event.savedTokens > 0) {
+          const pct = Math.round((event.savedTokens / event.originalTokens) * 100);
+          saved = ` ${fmt.green(`↓ saved ~${event.savedTokens} (${pct}%)`)}`;
+        }
+        console.error(
+          `${fmt.magenta('◆')} ${fmt.bold(`~${event.tokens} tokens`)}` +
+          `${fmt.dim(` ${event.width}×${event.height}`)}${saved}`,
+        );
+      });
       if (!filePath) {
         console.error(fmt.yellow('No image on clipboard'));
         process.exit(1);
       }
       // The path goes to stdout so it stays pipeable: `claude "$(clipimg)"`.
       console.log(filePath);
-
-      // When run interactively (not piped), show a friendly confirmation on
-      // stderr — stdout stays clean for command substitution.
-      if (process.stdout.isTTY) {
-        let size = '';
-        try { size = fmt.dim(` (${humanSize(statSync(filePath).size)})`); } catch { /* ignore */ }
-        console.error(`${fmt.green('✔')} ${fmt.bold('Image saved')}${size}`);
-      }
     } catch (err: unknown) {
       console.error(fmt.red(`Clipboard image failed: ${errorMessage(err)}`));
       process.exit(1);

@@ -3,6 +3,18 @@
 All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [Unreleased]
+
+### Added
+- **Automatic image compression** — oversized pastes are downscaled to fit a
+  vision-token budget (~1568 tokens) before saving, cutting the token cost of a
+  4K screenshot by ~66% on high-resolution models. Resolution stays at the level
+  Claude treats as full quality, and images already small enough are untouched.
+- **Token logging** — the CLI prints the estimated vision tokens (and savings)
+  for each paste in color on stderr; the VS Code extension shows it in the status
+  bar. stdout stays clean for `$(clipimg)`.
+- macOS resize falls back to the built-in `sips` when ImageMagick isn't installed.
+
 ## [0.2.0] - 2026-06-22
 
 ### Added
