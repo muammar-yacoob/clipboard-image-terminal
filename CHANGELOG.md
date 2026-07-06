@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 ## [Unreleased]
 
 ### Added
+- **Staged, colorful paste feedback** — the CLI now shows each step in place
+  (`◇ reading → ❖ compressing → ▸ saving`) and finishes with a brand-colored
+  `[img #n]` line carrying tokens, dimensions, size, and savings. The VS Code
+  extension mirrors the stages in a progress notification and a colored
+  `[img #n]` status-bar confirmation.
+- **Inline thumbnail preview** — after a paste the CLI renders a small preview of
+  the image (iTerm2 protocol) in terminals that support it — VS Code's integrated
+  terminal, iTerm2, and WezTerm — and stays silent everywhere else. Goes to
+  stderr, so stdout stays clean for `$(clipimg)`.
 - **Automatic image compression** — oversized pastes are downscaled to fit a
   vision-token budget (~1568 tokens) before saving, cutting the token cost of a
   4K screenshot by ~66% on high-resolution models. Resolution stays at the level
