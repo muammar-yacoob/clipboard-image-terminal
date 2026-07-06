@@ -39,7 +39,7 @@ npm install -g clipboard-image-terminal
 claude "look at $(clipimg)"   # copy an image first, then run this
 ```
 
-`clipimg` prints just the saved path to stdout (pipe-friendly). Useful flags: `-d ./shots` (custom dir), `help`.
+`clipimg` prints just the saved path to stdout (pipe-friendly). Useful flags: `-d ./shots` (custom dir), `-q` (path only), `help`.
 
 **VS Code extension** — for working inside the editor:
 
@@ -52,6 +52,7 @@ Focus the terminal and press **`Ctrl+Alt+V`** (or right-click → **Paste Clipbo
 ## ✨ Features
 
 - **Token-saving compression** — oversized images are downscaled to a vision-token budget before saving (~66% fewer tokens on a 4K screenshot), then logged so you can see the cost of each paste
+- **Staged feedback & inline preview** — the CLI shows each step as it works (`◇ reading → ❖ compressing → ▸ saving`), an `[img #n]` summary, and a small inline thumbnail in terminals that support it (VS Code, iTerm2, WezTerm); the extension mirrors it with a progress notification and status-bar badge
 - **Lossless PNG** — keeps screenshots of code & text crisp for vision models
 - **Cross-platform** — WSL/Windows, macOS, and Linux, each via its native clipboard tool
 - **Pipeable** — the CLI prints just the path to stdout, perfect for `$(clipimg)`
@@ -64,10 +65,12 @@ Focus the terminal and press **`Ctrl+Alt+V`** (or right-click → **Paste Clipbo
 | Option | Description |
 |---|---|
 | `-d, --dir <path>` | Output directory (default `/tmp/clipboard-images`) |
+| `-q, --quiet` | Print only the path — no staged UI or preview (errors still show) |
 | `-v, --version` | Print version |
 | `-h, --help` | Show help |
 
 Exits `1` and prints `No image on clipboard` when the clipboard holds no image.
+Respects [`NO_COLOR`](https://no-color.org) — set it to disable all ANSI color.
 
 ### ⚙️ Extension settings
 
