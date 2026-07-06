@@ -15,6 +15,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   the image (iTerm2 protocol) in terminals that support it — VS Code's integrated
   terminal, iTerm2, and WezTerm — and stays silent everywhere else. Goes to
   stderr, so stdout stays clean for `$(clipimg)`.
+- **`-q, --quiet` flag** — suppresses the staged UI and preview, printing only the
+  image path. Errors are still reported. Handy for scripting.
+- **`NO_COLOR` support** — the CLI now honors the
+  [`NO_COLOR`](https://no-color.org) convention; any non-empty value disables all
+  ANSI color (the banner, staged lines, and `[img #n]` badge included).
 - **Automatic image compression** — oversized pastes are downscaled to fit a
   vision-token budget (~1568 tokens) before saving, cutting the token cost of a
   4K screenshot by ~66% on high-resolution models. Resolution stays at the level

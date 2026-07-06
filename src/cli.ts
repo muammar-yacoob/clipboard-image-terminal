@@ -80,11 +80,13 @@ program
   .description('Save the clipboard image to a file and print its path (WSL, macOS, Linux)')
   .version(getVersion(), '-v, --version')
   .option('-d, --dir <path>', 'output directory', DEFAULT_OUTPUT_DIR)
-  .action((opts: { dir: string }) => {
+  .option('-q, --quiet', 'suppress the staged UI and preview; print only the path')
+  .action((opts: { dir: string; quiet?: boolean }) => {
+    const quiet = Boolean(opts.quiet);
     try {
       // All logging goes to stderr so stdout stays clean for `claude "$(clipimg)"`.
       let summary: PasteSummary | undefined;
-      const filePath = captureClipboardImage(opts.dir, (event) => {
+      const filePath = captureClipboardImage(opts.dir, quiet ? undefined : (event) => {
         const s = onEvent(event);
         if (s) summary = s;
       });
@@ -95,12 +97,14 @@ program
         process.exit(1);
       }
 
-      const n = bumpPasteCounter(opts.dir);
-      clearStage();
-      console.error(pastedLine(n, filePath, summary));
+      if (!quiet) {
+        const n = bumpPasteCounter(opts.dir);
+        clearStage();
+        console.error(pastedLine(n, filePath, summary));
 
-      // Inline preview when the terminal can render it (VS Code, iTerm2, WezTerm).
-      try { printThumbnail(readFileSync(filePath)); } catch { /* preview is best-effort */ }
+        // Inline preview when the terminal can render it (VS Code, iTerm2, WezTerm).
+        try { printThumbnail(readFileSync(filePath)); } catch { /* preview is best-effort */ }
+      }
 
       // The path goes to stdout so it stays pipeable: `claude "$(clipimg)"`.
       console.log(filePath);

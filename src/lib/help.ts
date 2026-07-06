@@ -20,6 +20,7 @@ export function showHelp(): void {
   console.log();
   console.log(head('  Options'));
   console.log(`    ${opt('-d, --dir <path>')}       Output directory ${fmt.dim(`(default: ${DEFAULT_OUTPUT_DIR})`)}`);
+  console.log(`    ${opt('-q, --quiet')}            Print only the path ${fmt.dim('(no staged UI or preview)')}`);
   console.log(`    ${opt('-v, --version')}          Print version`);
   console.log(`    ${opt('-h, --help')}             Show help`);
   console.log();

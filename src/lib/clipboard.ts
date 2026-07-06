@@ -113,23 +113,32 @@ function readViaPowerShell(): Buffer | null {
 }
 
 function readViaLinux(): Buffer | null {
-  const attempts: Array<[string, string[]]> = [
-    ['wl-paste', ['--no-newline', '--type', 'image/png']], // Wayland
-    ['xclip', ['-selection', 'clipboard', '-t', 'image/png', '-o']], // X11
-  ];
+  const wayland = Boolean(process.env.WAYLAND_DISPLAY);
+  const x11 = Boolean(process.env.DISPLAY);
 
-  let toolFound = false;
+  // Match the tool to the session so a broken cross-tool can't muddy detection:
+  // wl-paste for Wayland, xclip for X11. When the session type is unknown
+  // (neither display var set) we try both, as before.
+  const attempts: Array<[string, string[]]> = [];
+  if (wayland || !x11) attempts.push(['wl-paste', ['--no-newline', '--type', 'image/png']]);
+  if (x11 || !wayland) attempts.push(['xclip', ['-selection', 'clipboard', '-t', 'image/png', '-o']]);
+
+  let present = false;
   for (const [bin, args] of attempts) {
     try {
       const out = execFileSync(bin, args, BIN_OPTS);
       return out.length ? out : null;
     } catch (err: unknown) {
-      if ((err as { code?: string }).code !== 'ENOENT') toolFound = true; // ran but no image
+      if ((err as { code?: string }).code !== 'ENOENT') present = true; // ran but no image
     }
   }
 
-  if (!toolFound) {
-    throw new Error('No clipboard tool found. Install wl-clipboard (Wayland) or xclip (X11), then copy an image.');
+  if (!present) {
+    // Nothing we tried is installed — name the tool that fits this session.
+    const tool = wayland ? 'wl-clipboard (Wayland)'
+      : x11 ? 'xclip (X11)'
+      : 'wl-clipboard (Wayland) or xclip (X11)';
+    throw new Error(`No clipboard tool found. Install ${tool}, then copy an image.`);
   }
   return null; // tool present, but no image on clipboard
 }
