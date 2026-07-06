@@ -16,7 +16,7 @@ function applyRainbow(text: string): string {
   return lines
     .map((line, i) => {
       const [r, g, b] = lineColors[i % lineColors.length];
-      return `\x1b[38;2;${r};${g};${b}m${line}\x1b[0m`;
+      return fmt.rgb(r, g, b, line);
     })
     .join('\n');
 }
