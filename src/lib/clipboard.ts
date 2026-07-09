@@ -38,17 +38,22 @@ const MAX_PIXELS = TARGET_TOKENS * PATCH_PX * PATCH_PX; // ≈1.23 MP
 // so reported savings reflect what an oversized paste would actually have cost.
 const HIRES_MAX_TOKENS = 4784;
 
-/** What happened while capturing — surfaced to callers so they can log it. */
+/** Summary of a completed paste — dimensions and vision-token accounting. */
+export type PasteSummary = {
+  width: number;
+  height: number;
+  tokens: number; // estimated vision tokens for the saved image
+  originalTokens: number; // what it would have cost uncompressed (high-res tier)
+  savedTokens: number; // originalTokens - tokens, never negative
+};
+
+// Each stage the capture passes through, so callers can paint a live, staged UI.
+// The stages fire in order: reading → (compressing) → saving → pasted.
 export type CaptureEvent =
+  | { type: 'reading' }
   | { type: 'compressing' }
-  | {
-      type: 'pasted';
-      width: number;
-      height: number;
-      tokens: number; // estimated vision tokens for the saved image
-      originalTokens: number; // what it would have cost uncompressed (high-res tier)
-      savedTokens: number; // originalTokens - tokens, never negative
-    };
+  | { type: 'saving' }
+  | ({ type: 'pasted' } & PasteSummary);
 
 // Options for clipboard tools that stream raw image bytes to stdout (returns a Buffer).
 const BIN_OPTS: ExecFileSyncOptionsWithBufferEncoding = {
@@ -108,23 +113,32 @@ function readViaPowerShell(): Buffer | null {
 }
 
 function readViaLinux(): Buffer | null {
-  const attempts: Array<[string, string[]]> = [
-    ['wl-paste', ['--no-newline', '--type', 'image/png']], // Wayland
-    ['xclip', ['-selection', 'clipboard', '-t', 'image/png', '-o']], // X11
-  ];
+  const wayland = Boolean(process.env.WAYLAND_DISPLAY);
+  const x11 = Boolean(process.env.DISPLAY);
 
-  let toolFound = false;
+  // Match the tool to the session so a broken cross-tool can't muddy detection:
+  // wl-paste for Wayland, xclip for X11. When the session type is unknown
+  // (neither display var set) we try both, as before.
+  const attempts: Array<[string, string[]]> = [];
+  if (wayland || !x11) attempts.push(['wl-paste', ['--no-newline', '--type', 'image/png']]);
+  if (x11 || !wayland) attempts.push(['xclip', ['-selection', 'clipboard', '-t', 'image/png', '-o']]);
+
+  let present = false;
   for (const [bin, args] of attempts) {
     try {
       const out = execFileSync(bin, args, BIN_OPTS);
       return out.length ? out : null;
     } catch (err: unknown) {
-      if ((err as { code?: string }).code !== 'ENOENT') toolFound = true; // ran but no image
+      if ((err as { code?: string }).code !== 'ENOENT') present = true; // ran but no image
     }
   }
 
-  if (!toolFound) {
-    throw new Error('No clipboard tool found. Install wl-clipboard (Wayland) or xclip (X11), then copy an image.');
+  if (!present) {
+    // Nothing we tried is installed — name the tool that fits this session.
+    const tool = wayland ? 'wl-clipboard (Wayland)'
+      : x11 ? 'xclip (X11)'
+      : 'wl-clipboard (Wayland) or xclip (X11)';
+    throw new Error(`No clipboard tool found. Install ${tool}, then copy an image.`);
   }
   return null; // tool present, but no image on clipboard
 }
@@ -257,6 +271,16 @@ function resizeViaSips(buf: Buffer, w: number, h: number): Buffer {
 }
 
 /**
+ * Whether {@link compressImage} would resize this buffer — i.e. it decodes as a
+ * PNG and exceeds the visual-token budget. Lets a caller announce "compressing…"
+ * *before* the (blocking) resize runs.
+ */
+export function needsCompression(buf: Buffer): boolean {
+  const dims = pngDimensions(buf);
+  return dims !== null && dims.width * dims.height > MAX_PIXELS;
+}
+
+/**
  * Downscale a clipboard PNG to fit the visual-token budget, saving tokens for
  * vision models. Images already small enough (and anything that isn't a
  * decodable PNG) are returned untouched. `onCompress` fires only when a resize
@@ -316,6 +340,45 @@ export function saveImage(buf: Buffer, outputDir: string = DEFAULT_OUTPUT_DIR): 
 }
 
 /**
+ * Compare the original and saved bytes and report vision-token accounting.
+ * Returns `null` when the saved buffer isn't a decodable PNG.
+ */
+export function summarizePaste(raw: Buffer, finalBuf: Buffer): PasteSummary | null {
+  const after = pngDimensions(finalBuf);
+  if (!after) return null;
+
+  const before = pngDimensions(raw) ?? after;
+  const tokens = estimateImageTokens(after.width, after.height);
+  const originalTokens = Math.min(estimateImageTokens(before.width, before.height), HIRES_MAX_TOKENS);
+  return {
+    width: after.width,
+    height: after.height,
+    tokens,
+    originalTokens,
+    savedTokens: Math.max(0, originalTokens - tokens),
+  };
+}
+
+/**
+ * A monotonic count of pastes, persisted alongside the saved images so the
+ * number survives across CLI invocations (each run is a fresh process). Used to
+ * label pastes `[img #n]`. Best-effort: falls back to 1 if the dir isn't writable.
+ */
+export function bumpPasteCounter(outputDir: string = DEFAULT_OUTPUT_DIR): number {
+  try {
+    mkdirSync(outputDir, { recursive: true });
+    const counterFile = join(outputDir, '.paste-count');
+    let n = 0;
+    try { n = parseInt(readFileSync(counterFile, 'utf8'), 10) || 0; } catch { /* first paste */ }
+    n += 1;
+    writeFileSync(counterFile, String(n));
+    return n;
+  } catch {
+    return 1;
+  }
+}
+
+/**
  * Grab the clipboard image and persist it. Returns the saved path, or `null`
  * when there is no image on the clipboard.
  */
@@ -323,29 +386,18 @@ export function captureClipboardImage(
   outputDir: string = DEFAULT_OUTPUT_DIR,
   onEvent?: (event: CaptureEvent) => void,
 ): string | null {
+  onEvent?.({ type: 'reading' });
   const raw = readClipboardImage();
   if (!raw) return null;
 
   const finalBuf = compressImage(raw, () => onEvent?.({ type: 'compressing' }));
+
+  onEvent?.({ type: 'saving' });
   const filePath = saveImage(finalBuf, outputDir);
 
   if (onEvent) {
-    const after = pngDimensions(finalBuf);
-    const before = pngDimensions(raw) ?? after;
-    if (after) {
-      const tokens = estimateImageTokens(after.width, after.height);
-      const originalTokens = before
-        ? Math.min(estimateImageTokens(before.width, before.height), HIRES_MAX_TOKENS)
-        : tokens;
-      onEvent({
-        type: 'pasted',
-        width: after.width,
-        height: after.height,
-        tokens,
-        originalTokens,
-        savedTokens: Math.max(0, originalTokens - tokens),
-      });
-    }
+    const summary = summarizePaste(raw, finalBuf);
+    if (summary) onEvent({ type: 'pasted', ...summary });
   }
 
   return filePath;
