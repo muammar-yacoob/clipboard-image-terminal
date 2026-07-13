@@ -2,6 +2,15 @@ import { printBanner } from './banner';
 import { fmt } from './logger';
 import { DEFAULT_OUTPUT_DIR } from './clipboard';
 
+// Visible width of a string, ignoring ANSI color escapes — so colored labels
+// (e.g. a cyan command + a dim alias) pad to the right column.
+const visibleWidth = (s: string): number => s.replace(/\x1b\[[0-9;]*m/g, '').length;
+
+// Left-align `label` in a fixed-width column, measuring its visible width so the
+// following description starts at the same place on every row.
+const pad = (label: string, width: number): string =>
+  label + ' '.repeat(Math.max(2, width - visibleWidth(label)));
+
 /** Display the custom help screen. */
 export function showHelp(): void {
   printBanner();
@@ -22,11 +31,11 @@ export function showHelp(): void {
   );
   console.log();
   console.log(head('  Commands'));
-  console.log(`    ${cmd('(default)')}              Save the clipboard image and print its path`);
-  console.log(`    ${cmd('status')} ${fmt.dim('(ls)')}           Show the store: image count, disk size, and each image`);
-  console.log(`    ${cmd('clear')} ${fmt.dim('(clean)')}         Delete all saved images and reset the counter`);
-  console.log(`    ${cmd('doctor')} ${fmt.dim('(deps)')}         Check the clipboard tools this platform needs`);
-  console.log(`    ${cmd('help')}                   Show this help screen`);
+  console.log(`    ${pad(cmd('(default)'), 23)}Save the clipboard image and print its path`);
+  console.log(`    ${pad(`${cmd('status')} ${fmt.dim('(ls)')}`, 23)}Show the store: image count, disk size, and each image`);
+  console.log(`    ${pad(`${cmd('clear')} ${fmt.dim('(clean)')}`, 23)}Delete all saved images and reset the counter`);
+  console.log(`    ${pad(`${cmd('doctor')} ${fmt.dim('(deps)')}`, 23)}Check the clipboard tools this platform needs`);
+  console.log(`    ${pad(cmd('help'), 23)}Show this help screen`);
   console.log();
   console.log(head('  Options'));
   console.log(`    ${opt('-d, --dir <path>')}       Store directory ${fmt.dim(`(default: ${DEFAULT_OUTPUT_DIR})`)}`);

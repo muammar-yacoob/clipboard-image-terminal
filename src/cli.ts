@@ -223,4 +223,19 @@ program
   .description('Check the clipboard tools this platform needs')
   .action(() => doctorCmd());
 
-program.parse(process.argv);
+// A usage error — unknown command, unknown/invalid flag, or a missing value —
+// shows the full help and exits non-zero. `-h`/`--help`/`help` (handled above)
+// and `-v`/`--version` exit 0. Bare `clipimg` still runs the default action.
+program.exitOverride();
+program.configureOutput({ writeErr: () => {} }); // we print our own help instead
+
+const CLEAN_EXIT = new Set(['commander.help', 'commander.helpDisplayed', 'commander.version']);
+
+try {
+  program.parse(process.argv);
+} catch (err: unknown) {
+  const code = (err as { code?: string }).code ?? '';
+  if (CLEAN_EXIT.has(code)) process.exit((err as { exitCode?: number }).exitCode ?? 0);
+  showHelp();
+  process.exit(1);
+}

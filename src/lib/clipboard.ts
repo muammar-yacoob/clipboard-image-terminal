@@ -108,7 +108,12 @@ function readViaPowerShell(): Buffer | null {
     return b64 ? Buffer.from(b64, 'base64') : null;
   } catch (err: unknown) {
     if ((err as { status?: number }).status === 1) return null; // no image on clipboard
-    throw err;
+    // Any other failure means powershell.exe couldn't run at all (commonly WSL
+    // Windows-interop being down). Surface a short, actionable message instead
+    // of letting execFileSync leak the entire command + embedded script.
+    throw new Error(
+      'could not read the Windows clipboard via powershell.exe — on WSL this usually means Windows interop is down. Run `clipimg doctor`.',
+    );
   }
 }
 
