@@ -6,6 +6,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 ## [Unreleased]
 
 ### Added
+- **Background clipboard watcher** — bare `clipimg` now starts a detached daemon
+  that polls the clipboard and auto-saves each new image to the store; running it
+  again reports `already running` with the pid, uptime, and image count.
+  `clipimg stop` ends it, and `clipimg status` shows its state.
+- **`clipimg paste` (alias `grab`)** — the one-off capture that prints an image
+  path (what `$(clipimg paste)` uses). Accepts `-q, --quiet`.
+- **Help on invalid usage** — an unknown command or bad flag now prints the full
+  help and exits non-zero; `-h`/`--help`/`help`/`-v` exit 0.
+
+### Changed
+- **BREAKING: bare `clipimg` starts the watcher** instead of capturing. The
+  capture-and-print-path behavior moved to `clipimg paste`, so update pipelines
+  from `$(clipimg)` to `$(clipimg paste)`.
+- **`-d, --dir` works before or after a subcommand** (`clipimg -d X status` and
+  `clipimg status -d X` are equivalent).
+
+### Added (store & diagnostics)
 - **`clipimg status` (alias `ls`)** — inspect the on-disk store: image count,
   total size, and each saved image with its dimensions, size, age, estimated
   vision tokens, and an inline thumbnail where the terminal supports it.

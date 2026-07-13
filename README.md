@@ -36,22 +36,25 @@ AI coding tools (Claude Code, Aider, etc.) can't see an image you copy until it'
 
 ```sh
 npm install -g clipboard-image-terminal
-claude "look at $(clipimg)"   # copy an image first, then run this
+claude "look at $(clipimg paste)"   # copy an image first, then run this
 ```
 
-`clipimg` prints just the saved path to stdout (pipe-friendly). Useful flags: `-d ./shots` (custom dir), `-q` (path only), `help`.
+`clipimg paste` prints just the saved path to stdout (pipe-friendly). Useful flags: `-d ./shots` (custom dir), `-q` (path only).
 
-> **It's a one-shot command, not a background service.** Each run reads the
-> clipboard once, saves a PNG, prints its path, and exits — there's nothing to
-> start or stop, and it uses no RAM between runs. The saved images on disk are
-> the only state it keeps; manage them with the commands below.
+> **Two ways to use it.** Run bare `clipimg` to start a **background watcher**
+> that auto-saves every new clipboard image into the store; run it again to see
+> it's already running, and `clipimg stop` to end it. Or skip the watcher and use
+> `clipimg paste` for a one-off capture that prints a path — that's what `$(...)`
+> uses.
 
 ### 📦 Commands
 
 | Command | What it does |
 |---|---|
-| `clipimg` | Save the clipboard image and print its path (the default) |
-| `clipimg status` *(alias `ls`)* | Show the saved-image store: count, total size, and each image's dimensions, size, age, tokens, and a thumbnail where supported |
+| `clipimg` | Start the background clipboard watcher (or report it's already running) |
+| `clipimg paste` *(alias `grab`)* | Capture the clipboard image once and print its path |
+| `clipimg stop` | Stop the background watcher |
+| `clipimg status` *(alias `ls`)* | Show watcher state + the store: count, total size, and each image's dimensions, size, age, tokens, and a thumbnail where supported |
 | `clipimg clear` *(alias `clean`)* | Delete every saved image and reset the `[img #n]` counter |
 | `clipimg doctor` *(alias `deps`)* | Check the clipboard tools your platform needs, with install hints for anything missing |
 | `clipimg help` | Show the full help screen |
@@ -70,7 +73,8 @@ Focus the terminal and press **`Ctrl+Alt+V`** (or right-click → **Paste Clipbo
 - **Staged feedback & inline preview** — the CLI shows each step as it works (`◇ reading → ❖ compressing → ▸ saving`), an `[img #n]` summary, and a small inline thumbnail in terminals that support it (VS Code, iTerm2, WezTerm); the extension mirrors it with a progress notification and status-bar badge
 - **Lossless PNG** — keeps screenshots of code & text crisp for vision models
 - **Cross-platform** — WSL/Windows, macOS, and Linux, each via its native clipboard tool
-- **Pipeable** — the CLI prints just the path to stdout, perfect for `$(clipimg)`
+- **Background watcher or one-shot** — run bare `clipimg` to auto-save clipboard images in the background, or `clipimg paste` for a single capture
+- **Pipeable** — `clipimg paste` prints just the path to stdout, perfect for `$(clipimg paste)`
 - **De-duplicated** — images are named by content hash, so re-pasting the same image is a no-op
 - **Self-cleaning** — saved images older than 7 days are pruned automatically
 - **Configurable output directory** — `-d` flag (CLI) or a VS Code setting

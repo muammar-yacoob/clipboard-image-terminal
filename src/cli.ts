@@ -5,10 +5,11 @@ import {
   captureClipboardImage, bumpPasteCounter, DEFAULT_OUTPUT_DIR,
   type CaptureEvent, type PasteSummary,
 } from './lib/clipboard';
+import { readDaemon, runWatchLoop, startDaemon, stopDaemon } from './lib/daemon';
 import { runDoctor, type ToolStatus } from './lib/doctor';
 import { showHelp } from './lib/help';
 import { fmt } from './lib/logger';
-import { humanAge, humanSize } from './lib/format';
+import { humanAge, humanDuration, humanSize } from './lib/format';
 import { clearStore, readStore } from './lib/store';
 import { printThumbnail, terminalSupportsInlineImages } from './lib/thumbnail';
 import { errorMessage } from './lib/errors';
@@ -35,7 +36,7 @@ function clearStage(): void {
   if (tty) process.stderr.write('\r\x1b[K');
 }
 
-// Colorful, staged feedback for each step of the paste.
+// Colorful, staged feedback for each step of a paste.
 function onEvent(event: CaptureEvent): PasteSummary | void {
   switch (event.type) {
     case 'reading':
@@ -68,11 +69,11 @@ function pastedLine(n: number, filePath: string, s: PasteSummary | undefined): s
   return parts.join(' ');
 }
 
-// Default command: read the clipboard once, save it, print the path, exit.
+// `paste`: read the clipboard once, save it, print the path, exit.
 function capture(opts: { dir: string; quiet?: boolean }): void {
   const quiet = Boolean(opts.quiet);
   try {
-    // All logging goes to stderr so stdout stays clean for `claude "$(clipimg)"`.
+    // All logging goes to stderr so stdout stays clean for `claude "$(clipimg paste)"`.
     let summary: PasteSummary | undefined;
     const filePath = captureClipboardImage(opts.dir, quiet ? undefined : (event) => {
       const s = onEvent(event);
@@ -94,7 +95,7 @@ function capture(opts: { dir: string; quiet?: boolean }): void {
       try { printThumbnail(readFileSync(filePath)); } catch { /* preview is best-effort */ }
     }
 
-    // The path goes to stdout so it stays pipeable: `claude "$(clipimg)"`.
+    // The path goes to stdout so it stays pipeable: `claude "$(clipimg paste)"`.
     console.log(filePath);
   } catch (err: unknown) {
     clearStage();
@@ -103,23 +104,57 @@ function capture(opts: { dir: string; quiet?: boolean }): void {
   }
 }
 
-// `status` / `ls`: show what the on-disk store holds — clipimg keeps nothing in RAM.
+// Default command: start the background watcher, or report it's already up.
+function startCmd(opts: { dir: string }): void {
+  const res = startDaemon(opts.dir);
+  if (res.started) {
+    console.log(
+      `${fmt.green('✓')} started ${fmt.dim('·')} PID ${fmt.bold(String(res.pid))} ` +
+      `${fmt.dim('·')} watching clipboard ${fmt.dim(`→ ${opts.dir}`)}`,
+    );
+    console.log(fmt.dim('  auto-saves new images · `clipimg status` to list · `clipimg stop` to end'));
+  } else {
+    const store = readStore(opts.dir);
+    const up = res.startedAtMs ? humanDuration(Date.now() - res.startedAtMs) : '?';
+    const noun = store.count === 1 ? 'image' : 'images';
+    console.log(
+      `${fmt.yellow('●')} already running ${fmt.dim('·')} PID ${fmt.bold(String(res.pid))} ` +
+      `${fmt.dim('·')} up ${up} ${fmt.dim('·')} ${store.count} ${noun}`,
+    );
+  }
+}
+
+// `stop`: end the background watcher.
+function stopCmd(opts: { dir: string }): void {
+  const res = stopDaemon(opts.dir);
+  if (res.stopped) {
+    console.log(`${fmt.green('✓')} stopped ${fmt.dim('·')} PID ${fmt.bold(String(res.pid))}`);
+  } else {
+    console.log(fmt.yellow('● watcher not running'));
+  }
+}
+
+// `status` / `ls`: watcher state + what the on-disk store holds.
 function showStatus(opts: { dir: string }): void {
+  const daemon = readDaemon(opts.dir);
   const store = readStore(opts.dir);
   const now = Date.now();
 
   console.log();
-  console.log(`${fmt.magenta('◆')} ${fmt.bold('clipimg store')}  ${fmt.dim('·')}  ${fmt.cyan(store.dir)}`);
+  console.log(`${fmt.magenta('◆')} ${fmt.bold('clipimg')}  ${fmt.dim('·')}  ${fmt.cyan(store.dir)}`);
+  if (daemon.running) {
+    const up = daemon.startedAtMs ? humanDuration(now - daemon.startedAtMs) : '?';
+    console.log(`  ${fmt.green('●')} watcher running ${fmt.dim('·')} PID ${fmt.bold(String(daemon.pid))} ${fmt.dim('·')} up ${up}`);
+  } else {
+    console.log(`  ${fmt.dim('○ watcher not running — start it by running `clipimg`')}`);
+  }
   const noun = store.count === 1 ? 'image' : 'images';
-  console.log(
-    `  ${fmt.bold(String(store.count))} ${noun} ${fmt.dim('·')} ${humanSize(store.totalBytes)} on disk ` +
-    `${fmt.dim('·')} ${fmt.dim('no background process (each capture runs once and exits — 0 B resident)')}`,
-  );
-  if (store.counter !== null) console.log(`  ${fmt.dim(`lifetime pastes: #${store.counter}`)}`);
+  const counter = store.counter !== null ? ` ${fmt.dim('·')} ${fmt.dim(`#${store.counter} pastes`)}` : '';
+  console.log(`  ${fmt.bold(String(store.count))} ${noun} ${fmt.dim('·')} ${humanSize(store.totalBytes)} on disk${counter}`);
 
   if (store.count === 0) {
     console.log();
-    console.log(fmt.dim('  empty — copy an image and run `clipimg` to add one'));
+    console.log(fmt.dim('  no saved images yet — copy an image (the watcher auto-saves) or run `clipimg paste`'));
     return;
   }
 
@@ -141,7 +176,7 @@ function showStatus(opts: { dir: string }): void {
   console.log(fmt.dim('  clear all with `clipimg clear`'));
 }
 
-// `clear` / `clean`: wipe the on-disk store (this is "clearing its memory").
+// `clear` / `clean`: wipe the on-disk store.
 function clearCmd(opts: { dir: string }): void {
   const before = readStore(opts.dir);
   if (before.count === 0) {
@@ -185,57 +220,87 @@ function doctorCmd(): void {
   process.exit(report.ok ? 0 : 1);
 }
 
-// Show the rich figlet help for a top-level `help`, `-h`, or `--help`. Leaving
-// subcommand flags (e.g. `clipimg status --help`) to commander.
-const argv = process.argv.slice(2);
-if (argv[0] === 'help' || argv[0] === '-h' || argv[0] === '--help') {
-  showHelp();
-  process.exit(0);
+function runCli(argv: string[]): void {
+  // Rich figlet help for a top-level `help`, `-h`, or `--help`; subcommand flags
+  // (e.g. `clipimg paste --help`) fall through to commander.
+  if (argv[0] === 'help' || argv[0] === '-h' || argv[0] === '--help') {
+    showHelp();
+    process.exit(0);
+  }
+
+  const program = new Command();
+
+  // `-d` is defined on the root (with the default) and, without a default, on each
+  // subcommand — so `optsWithGlobals()` resolves it whether it's placed before the
+  // command (`clipimg -d X status`) or after it (`clipimg status -d X`), and the
+  // subcommand never shadows the global with a default of its own.
+  const subDir = (cmd: Command): { dir: string } => ({ dir: cmd.optsWithGlobals().dir as string });
+
+  program
+    .name('clipimg')
+    .description('Watch the clipboard and auto-save images; `paste` captures one and prints its path')
+    .version(getVersion(), '-v, --version')
+    .option('-d, --dir <path>', 'store directory', DEFAULT_OUTPUT_DIR)
+    .action((opts: { dir: string }) => startCmd(opts));
+
+  program
+    .command('paste')
+    .alias('grab')
+    .description('Capture the clipboard image once and print its path')
+    .option('-d, --dir <path>', 'store directory')
+    .option('-q, --quiet', 'suppress the staged UI and preview; print only the path')
+    .action((_opts: unknown, cmd: Command) => {
+      const o = cmd.optsWithGlobals();
+      capture({ dir: o.dir as string, quiet: o.quiet as boolean | undefined });
+    });
+
+  program
+    .command('stop')
+    .description('Stop the clipboard watcher')
+    .option('-d, --dir <path>', 'store directory')
+    .action((_opts: unknown, cmd: Command) => stopCmd(subDir(cmd)));
+
+  program
+    .command('status')
+    .aliases(['ls', 'list'])
+    .description('Show the watcher state and the saved-image store')
+    .option('-d, --dir <path>', 'store directory')
+    .action((_opts: unknown, cmd: Command) => showStatus(subDir(cmd)));
+
+  program
+    .command('clear')
+    .alias('clean')
+    .description('Delete every saved image and reset the paste counter')
+    .option('-d, --dir <path>', 'store directory')
+    .action((_opts: unknown, cmd: Command) => clearCmd(subDir(cmd)));
+
+  program
+    .command('doctor')
+    .alias('deps')
+    .description('Check the clipboard tools this platform needs')
+    .action(() => doctorCmd());
+
+  // A usage error — unknown command, unknown/invalid flag, or a missing value —
+  // shows the full help and exits non-zero. `-h`/`--help`/`help` (handled above)
+  // and `-v`/`--version` exit 0. Bare `clipimg` runs the default (start) action.
+  program.exitOverride();
+  program.configureOutput({ writeErr: () => {} }); // we print our own help instead
+
+  const CLEAN_EXIT = new Set(['commander.help', 'commander.helpDisplayed', 'commander.version']);
+  try {
+    program.parse(process.argv);
+  } catch (err: unknown) {
+    const code = (err as { code?: string }).code ?? '';
+    if (CLEAN_EXIT.has(code)) process.exit((err as { exitCode?: number }).exitCode ?? 0);
+    showHelp();
+    process.exit(1);
+  }
 }
 
-const program = new Command();
-
-program
-  .name('clipimg')
-  .description('Save the clipboard image to a file and print its path (WSL, macOS, Linux)')
-  .version(getVersion(), '-v, --version')
-  .option('-d, --dir <path>', 'output directory', DEFAULT_OUTPUT_DIR)
-  .option('-q, --quiet', 'suppress the staged UI and preview; print only the path')
-  .action((opts: { dir: string; quiet?: boolean }) => capture(opts));
-
-program
-  .command('status')
-  .aliases(['ls', 'list'])
-  .description('Show the saved-image store: count, size, and each image')
-  .option('-d, --dir <path>', 'output directory', DEFAULT_OUTPUT_DIR)
-  .action((opts: { dir: string }) => showStatus(opts));
-
-program
-  .command('clear')
-  .alias('clean')
-  .description('Delete every saved image and reset the paste counter')
-  .option('-d, --dir <path>', 'output directory', DEFAULT_OUTPUT_DIR)
-  .action((opts: { dir: string }) => clearCmd(opts));
-
-program
-  .command('doctor')
-  .alias('deps')
-  .description('Check the clipboard tools this platform needs')
-  .action(() => doctorCmd());
-
-// A usage error — unknown command, unknown/invalid flag, or a missing value —
-// shows the full help and exits non-zero. `-h`/`--help`/`help` (handled above)
-// and `-v`/`--version` exit 0. Bare `clipimg` still runs the default action.
-program.exitOverride();
-program.configureOutput({ writeErr: () => {} }); // we print our own help instead
-
-const CLEAN_EXIT = new Set(['commander.help', 'commander.helpDisplayed', 'commander.version']);
-
-try {
-  program.parse(process.argv);
-} catch (err: unknown) {
-  const code = (err as { code?: string }).code ?? '';
-  if (CLEAN_EXIT.has(code)) process.exit((err as { exitCode?: number }).exitCode ?? 0);
-  showHelp();
-  process.exit(1);
+const args = process.argv.slice(2);
+if (args[0] === '__watch') {
+  // Internal entry: the detached child spawned by `startDaemon` runs the loop.
+  runWatchLoop(args[1] || DEFAULT_OUTPUT_DIR);
+} else {
+  runCli(args);
 }
