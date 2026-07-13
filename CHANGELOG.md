@@ -14,6 +14,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   offered image type instead of assuming PNG (Windows hands WSLg an `image/bmp`)
   and converts it to PNG via ImageMagick. This is what makes real Windows image
   copies capture on WSL.
+- **Clearer `doctor` on WSL** — it leads with the reader clipimg will actually use
+  (the WSLg fallback), tests that it can *connect* (not just that it's on PATH),
+  reports "available via WSLg", and shows unavailable PowerShell as a dim optional
+  note instead of an alarming ✗ with a "fix interop" wall.
 - **Background clipboard watcher** — bare `clipimg` now starts a detached daemon
   that polls the clipboard and auto-saves each new image to the store; running it
   again reports `already running` with the pid, uptime, and image count.

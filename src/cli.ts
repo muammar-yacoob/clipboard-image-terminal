@@ -6,7 +6,7 @@ import {
   type CaptureEvent, type PasteSummary,
 } from './lib/clipboard';
 import { readDaemon, readDaemonLog, runWatchLoop, startDaemon, stopDaemon } from './lib/daemon';
-import { runDoctor, type ToolStatus } from './lib/doctor';
+import { runDoctor } from './lib/doctor';
 import { showHelp } from './lib/help';
 import { fmt, hyperlink } from './lib/logger';
 import { humanAge, humanDuration, humanSize } from './lib/format';
@@ -229,27 +229,26 @@ function logsCmd(opts: { dir: string }): void {
 // `doctor` / `deps`: report the clipboard backend tools for this platform.
 function doctorCmd(): void {
   const report = runDoctor();
-  const icon: Record<ToolStatus, string> = {
-    ok: fmt.green('✓'),
-    broken: fmt.red('✗'),
-    missing: fmt.yellow('○'),
-  };
 
   console.log();
   console.log(`${fmt.magenta('◆')} ${fmt.bold('clipimg doctor')}  ${fmt.dim('·')}  platform: ${fmt.cyan(report.platform)}`);
   console.log();
   for (const c of report.checks) {
-    const mark = c.required && c.status !== 'ok' ? fmt.red('✗') : icon[c.status];
+    // Only a *required* tool that isn't ok is a real problem (red ✗). An
+    // unavailable optional/alternative is a dim ○ — informative, not alarming.
+    const mark = c.status === 'ok' ? fmt.green('✓')
+      : c.required ? fmt.red('✗')
+      : fmt.dim('○');
     const tag = c.required ? '' : fmt.dim(' (optional)');
     console.log(`  ${mark} ${fmt.bold(c.name)}${tag}  ${fmt.dim(c.role)}`);
     if (c.status !== 'ok' && c.hint) console.log(`      ${fmt.dim('→')} ${c.hint}`);
   }
   console.log();
-  console.log(
-    report.ok
-      ? fmt.green('  Clipboard capture is available.')
-      : fmt.yellow('  Clipboard capture is unavailable — see the fixes above.'),
-  );
+  if (report.ok) {
+    console.log(fmt.green(`  Clipboard capture is available${report.active ? ` via ${report.active}` : ''}.`));
+  } else {
+    console.log(fmt.yellow('  Clipboard capture is unavailable — see the fixes above.'));
+  }
   console.log(fmt.dim('  Note: clipimg never auto-installs system packages (that needs root and varies per distro).'));
   process.exit(report.ok ? 0 : 1);
 }
