@@ -63,9 +63,9 @@ const BIN_OPTS: ExecFileSyncOptionsWithBufferEncoding = {
   encoding: 'buffer',
 };
 
-type Platform = 'wsl' | 'windows' | 'macos' | 'linux';
+export type Platform = 'wsl' | 'windows' | 'macos' | 'linux';
 
-function detectPlatform(): Platform {
+export function detectPlatform(): Platform {
   if (process.platform === 'darwin') return 'macos';
   if (process.platform === 'win32') return 'windows';
   if (process.env.WSL_DISTRO_NAME) return 'wsl';

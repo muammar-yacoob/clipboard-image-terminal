@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'bun:test';
-import { humanSize, estimateImageTokens } from '../src/lib/format';
+import { humanSize, humanAge, estimateImageTokens } from '../src/lib/format';
 
 describe('humanSize', () => {
   test('zero', () => expect(humanSize(0)).toBe('0 B'));
@@ -7,6 +7,14 @@ describe('humanSize', () => {
   test('kilobytes', () => expect(humanSize(1536)).toBe('1.5 KB'));
   test('megabytes', () => expect(humanSize(5 * 1024 * 1024)).toBe('5.0 MB'));
   test('caps at GB', () => expect(humanSize(3 * 1024 ** 3)).toBe('3.0 GB'));
+});
+
+describe('humanAge', () => {
+  test('seconds', () => expect(humanAge(5_000)).toBe('5s ago'));
+  test('minutes', () => expect(humanAge(3 * 60_000)).toBe('3m ago'));
+  test('hours', () => expect(humanAge(2 * 3_600_000)).toBe('2h ago'));
+  test('days', () => expect(humanAge(4 * 86_400_000)).toBe('4d ago'));
+  test('never negative', () => expect(humanAge(-1000)).toBe('0s ago'));
 });
 
 describe('estimateImageTokens', () => {

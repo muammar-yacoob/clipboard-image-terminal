@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 ## [Unreleased]
 
 ### Added
+- **`clipimg status` (alias `ls`)** — inspect the on-disk store: image count,
+  total size, and each saved image with its dimensions, size, age, estimated
+  vision tokens, and an inline thumbnail where the terminal supports it.
+- **`clipimg clear` (alias `clean`)** — delete every saved image and reset the
+  `[img #n]` counter, reporting how much disk space was freed.
+- **`clipimg doctor` (alias `deps`)** — check the clipboard tools the current
+  platform needs and, for anything missing, how to install it. Detects the WSL
+  Windows-interop "exec format error" state and prints the fix.
 - **Staged, colorful paste feedback** — the CLI now shows each step in place
   (`◇ reading → ❖ compressing → ▸ saving`) and finishes with a brand-colored
   `[img #n]` line carrying tokens, dimensions, size, and savings. The VS Code
@@ -28,6 +36,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   for each paste in color on stderr; the VS Code extension shows it in the status
   bar. stdout stays clean for `$(clipimg)`.
 - macOS resize falls back to the built-in `sips` when ImageMagick isn't installed.
+
+### Changed
+- **Help clarifies the one-shot model** — `clipimg` runs once per capture and
+  exits; there is no daemon to start/stop and no RAM used between runs. The saved
+  images on disk are the "store", managed via `status`/`clear`.
 
 ## [0.2.0] - 2026-06-22
 

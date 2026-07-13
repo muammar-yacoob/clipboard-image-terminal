@@ -41,6 +41,21 @@ claude "look at $(clipimg)"   # copy an image first, then run this
 
 `clipimg` prints just the saved path to stdout (pipe-friendly). Useful flags: `-d ./shots` (custom dir), `-q` (path only), `help`.
 
+> **It's a one-shot command, not a background service.** Each run reads the
+> clipboard once, saves a PNG, prints its path, and exits — there's nothing to
+> start or stop, and it uses no RAM between runs. The saved images on disk are
+> the only state it keeps; manage them with the commands below.
+
+### 📦 Commands
+
+| Command | What it does |
+|---|---|
+| `clipimg` | Save the clipboard image and print its path (the default) |
+| `clipimg status` *(alias `ls`)* | Show the saved-image store: count, total size, and each image's dimensions, size, age, tokens, and a thumbnail where supported |
+| `clipimg clear` *(alias `clean`)* | Delete every saved image and reset the `[img #n]` counter |
+| `clipimg doctor` *(alias `deps`)* | Check the clipboard tools your platform needs, with install hints for anything missing |
+| `clipimg help` | Show the full help screen |
+
 **VS Code extension** — for working inside the editor:
 
 ```sh
@@ -93,6 +108,17 @@ Node.js ≥ 20 (CLI only), plus a clipboard tool for your platform:
 Compression uses each platform's native resizer — PowerShell on WSL/Windows, the
 built-in `sips` (or ImageMagick) on macOS, ImageMagick on Linux. If none is
 available, the image is still pasted at full size; only the token saving is skipped.
+
+**Why the extra tool on Linux (and sometimes macOS)?** Node has no built-in way
+to read image bytes from the clipboard, so `clipimg` shells out to the OS. On
+Windows/WSL that's PowerShell + .NET (always present) and on macOS it's the
+built-in `osascript` — neither needs anything installed. Linux has *no* standard
+clipboard API; the reader is display-server-specific (`wl-paste` for Wayland,
+`xclip` for X11), and those aren't preinstalled on most distros. `clipimg`
+**does not auto-install** system packages — that needs root and differs per
+distro, which is a footgun for an npm/VS Code package — so instead it detects
+what's missing and tells you exactly what to install. Run `clipimg doctor` to see
+the status for your machine.
 
 ## 🛠️ Development
 

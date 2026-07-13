@@ -8,6 +8,17 @@ export function humanSize(bytes: number): string {
   return `${n.toFixed(1)} ${units[i]}`;
 }
 
+/** Compact relative age, e.g. "5s ago", "3m ago", "2h ago", "4d ago". */
+export function humanAge(ms: number): string {
+  const s = Math.max(0, Math.round(ms / 1000));
+  if (s < 60) return `${s}s ago`;
+  const m = Math.round(s / 60);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.round(m / 60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.round(h / 24)}d ago`;
+}
+
 /** Width/height of one vision patch in pixels — Claude bills one token per patch. */
 export const PATCH_PX = 28;
 
