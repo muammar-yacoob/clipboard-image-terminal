@@ -210,12 +210,19 @@ function logsCmd(opts: { dir: string }): void {
     const m = line.match(/^(\[[^\]]+\])\s?(.*)$/); // "[timestamp] message"
     const ts = m ? fmt.dim(m[1]) : '';
     const msg = m ? m[2] : line;
-    const paint = /failed|error/i.test(msg) ? fmt.red
-      : /saved/i.test(msg) ? fmt.green
-      : /readable again|started/i.test(msg) ? fmt.cyan
-      : /stop/i.test(msg) ? fmt.yellow
-      : fmt.gray;
-    console.log(`${ts} ${paint(msg)}`.trim());
+    // A captured-image line gets the same brand-colored `[img #n]` badge as `paste`.
+    const img = msg.match(/^(\[img #\d+\])\s*(.*)$/);
+    let painted: string;
+    if (img) {
+      painted = `${fmt.bold(fmt.rgb(...BRAND, img[1]))} ${fmt.green(img[2])}`;
+    } else {
+      const paint = /failed|error/i.test(msg) ? fmt.red
+        : /readable again|started/i.test(msg) ? fmt.cyan
+        : /stop/i.test(msg) ? fmt.yellow
+        : fmt.gray;
+      painted = paint(msg);
+    }
+    console.log(`${ts} ${painted}`.trim());
   }
 }
 

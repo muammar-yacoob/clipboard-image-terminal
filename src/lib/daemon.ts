@@ -14,8 +14,10 @@ import { appendFileSync, mkdirSync, openSync, readFileSync, unlinkSync, writeFil
 import { join, resolve } from 'node:path';
 
 import {
-  compressImage, DEFAULT_OUTPUT_DIR, readClipboardImage, saveImage, shortHash,
+  bumpPasteCounter, compressImage, DEFAULT_OUTPUT_DIR, readClipboardImage,
+  saveImage, shortHash, summarizePaste,
 } from './clipboard';
+import { humanSize } from './format';
 
 const PID_FILE = '.daemon.pid';
 const LOG_FILE = '.daemon.log';
@@ -143,8 +145,14 @@ export function runWatchLoop(dir: string = DEFAULT_OUTPUT_DIR): void {
       const hash = shortHash(raw);
       if (hash === lastHash) return;
       lastHash = hash;
-      const filePath = saveImage(compressImage(raw), dir);
-      log(`saved ${filePath}`);
+      const finalBuf = compressImage(raw);
+      const filePath = saveImage(finalBuf, dir);
+      // Mirror the `[img #n]` line the interactive `paste` prints, so the watcher's
+      // captures read the same in `clipimg logs`.
+      const n = bumpPasteCounter(dir);
+      const s = summarizePaste(raw, finalBuf);
+      const meta = s ? `${s.width}×${s.height} · ${humanSize(finalBuf.length)} · ~${s.tokens} tok` : humanSize(finalBuf.length);
+      log(`[img #${n}] saved ${meta} → ${filePath}`);
     } catch (err: unknown) {
       if (!erroring) {
         erroring = true;
