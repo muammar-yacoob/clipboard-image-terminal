@@ -5,10 +5,10 @@ import {
   captureClipboardImage, bumpPasteCounter, DEFAULT_OUTPUT_DIR,
   type CaptureEvent, type PasteSummary,
 } from './lib/clipboard';
-import { readDaemon, runWatchLoop, startDaemon, stopDaemon } from './lib/daemon';
+import { readDaemon, readDaemonLog, runWatchLoop, startDaemon, stopDaemon } from './lib/daemon';
 import { runDoctor, type ToolStatus } from './lib/doctor';
 import { showHelp } from './lib/help';
-import { fmt } from './lib/logger';
+import { fmt, hyperlink } from './lib/logger';
 import { humanAge, humanDuration, humanSize } from './lib/format';
 import { clearStore, readStore } from './lib/store';
 import { printThumbnail, terminalSupportsInlineImages } from './lib/thumbnail';
@@ -144,7 +144,7 @@ function showStatus(opts: { dir: string }): void {
   const now = Date.now();
 
   console.log();
-  console.log(`${fmt.magenta('◆')} ${fmt.bold('clipimg')}  ${fmt.dim('·')}  ${fmt.cyan(store.dir)}`);
+  console.log(`${fmt.magenta('◆')} ${fmt.bold('clipimg')}  ${fmt.dim('·')}  ${hyperlink(`file://${store.dir}`, fmt.cyan(store.dir))}`);
   if (daemon.running) {
     const up = daemon.startedAtMs ? humanDuration(now - daemon.startedAtMs) : '?';
     console.log(`  ${fmt.green('●')} watcher running ${fmt.dim('·')} PID ${fmt.bold(String(daemon.pid))} ${fmt.dim('·')} up ${up}`);
@@ -165,7 +165,8 @@ function showStatus(opts: { dir: string }): void {
   const showThumb = terminalSupportsInlineImages(process.stdout);
   store.entries.forEach((e, i) => {
     const idx = fmt.dim(`${i + 1}`.padStart(2));
-    const name = fmt.cyan(e.name.replace(/\.png$/, '').slice(0, 12));
+    // Clickable file:// link — opens the image in the default viewer.
+    const name = hyperlink(`file://${e.path}`, fmt.cyan(e.name.replace(/\.png$/, '').slice(0, 12)));
     const age = humanAge(now - e.mtimeMs).padEnd(8);
     const dims = (e.width && e.height ? `${e.width}×${e.height}` : '—').padEnd(11);
     const size = humanSize(e.bytes).padEnd(9);
@@ -193,6 +194,26 @@ function clearCmd(opts: { dir: string }): void {
     `${fmt.dim('·')} freed ${humanSize(res.freedBytes)} ${fmt.dim('·')} ${fmt.dim(opts.dir)}`,
   );
   console.log(fmt.dim('  paste counter reset to 0'));
+}
+
+// `logs`: the watcher's activity log — stored plain on disk, colorized here.
+function logsCmd(opts: { dir: string }): void {
+  const lines = readDaemonLog(opts.dir);
+  if (lines.length === 0) {
+    console.log(fmt.yellow(`No watcher log yet · ${opts.dir}`));
+    return;
+  }
+  for (const line of lines) {
+    const m = line.match(/^(\[[^\]]+\])\s?(.*)$/); // "[timestamp] message"
+    const ts = m ? fmt.dim(m[1]) : '';
+    const msg = m ? m[2] : line;
+    const paint = /failed|error/i.test(msg) ? fmt.red
+      : /saved/i.test(msg) ? fmt.green
+      : /readable again|started/i.test(msg) ? fmt.cyan
+      : /stop/i.test(msg) ? fmt.yellow
+      : fmt.gray;
+    console.log(`${ts} ${paint(msg)}`.trim());
+  }
 }
 
 // `doctor` / `deps`: report the clipboard backend tools for this platform.
@@ -269,6 +290,12 @@ function runCli(argv: string[]): void {
     .description('Show the watcher state and the saved-image store')
     .option('-d, --dir <path>', 'store directory')
     .action((_opts: unknown, cmd: Command) => showStatus(subDir(cmd)));
+
+  program
+    .command('logs')
+    .description('Show the watcher activity log (colorized)')
+    .option('-d, --dir <path>', 'store directory')
+    .action((_opts: unknown, cmd: Command) => logsCmd(subDir(cmd)));
 
   program
     .command('clear')

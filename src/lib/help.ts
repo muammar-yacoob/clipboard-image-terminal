@@ -35,6 +35,7 @@ export function showHelp(): void {
   console.log(`    ${pad(`${cmd('paste')} ${fmt.dim('(grab)')}`, 23)}Capture the clipboard image once and print its path`);
   console.log(`    ${pad(cmd('stop'), 23)}Stop the clipboard watcher`);
   console.log(`    ${pad(`${cmd('status')} ${fmt.dim('(ls)')}`, 23)}Show watcher state + the saved-image store`);
+  console.log(`    ${pad(cmd('logs'), 23)}Show the watcher activity log (colorized)`);
   console.log(`    ${pad(`${cmd('clear')} ${fmt.dim('(clean)')}`, 23)}Delete all saved images and reset the counter`);
   console.log(`    ${pad(`${cmd('doctor')} ${fmt.dim('(deps)')}`, 23)}Check the clipboard tools this platform needs`);
   console.log(`    ${pad(cmd('help'), 23)}Show this help screen`);

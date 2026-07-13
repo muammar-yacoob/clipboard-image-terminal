@@ -44,6 +44,15 @@ function isAlive(pid: number): boolean {
   }
 }
 
+/** Last `maxLines` lines of the watcher log (plain text; colorize on display). */
+export function readDaemonLog(dir: string = DEFAULT_OUTPUT_DIR, maxLines = 40): string[] {
+  try {
+    return readFileSync(logPath(dir), 'utf8').split('\n').filter(Boolean).slice(-maxLines);
+  } catch {
+    return []; // no log yet
+  }
+}
+
 /** Read the pid file and confirm the process is actually alive. */
 export function readDaemon(dir: string = DEFAULT_OUTPUT_DIR): DaemonState {
   try {

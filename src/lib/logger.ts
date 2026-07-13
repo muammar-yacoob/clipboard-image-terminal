@@ -36,3 +36,12 @@ export const fmt = {
   rgb: (r: number, g: number, b: number, s: string) =>
     colorEnabled ? `\x1b[38;2;${r};${g};${b}m${s}${RESET}` : s,
 };
+
+/**
+ * OSC 8 hyperlink — makes `label` clickable (e.g. a `file://` path) in terminals
+ * that support it (VS Code, iTerm2, WezTerm, GNOME Terminal, …). Falls back to
+ * plain `label` when output is piped, so redirected text stays clean.
+ */
+export function hyperlink(url: string, label: string): string {
+  return process.stdout.isTTY ? `\x1b]8;;${url}\x1b\\${label}\x1b]8;;\x1b\\` : label;
+}

@@ -54,7 +54,8 @@ claude "look at $(clipimg paste)"   # copy an image first, then run this
 | `clipimg` | Start the background clipboard watcher (or report it's already running) |
 | `clipimg paste` *(alias `grab`)* | Capture the clipboard image once and print its path |
 | `clipimg stop` | Stop the background watcher |
-| `clipimg status` *(alias `ls`)* | Show watcher state + the store: count, total size, and each image's dimensions, size, age, tokens, and a thumbnail where supported |
+| `clipimg status` *(alias `ls`)* | Show watcher state + the store: count, total size, and each image's dimensions, size, age, tokens, a thumbnail where supported, and a clickable `file://` link |
+| `clipimg logs` | Show the watcher's activity log, colorized (the on-disk log stays plain) |
 | `clipimg clear` *(alias `clean`)* | Delete every saved image and reset the `[img #n]` counter |
 | `clipimg doctor` *(alias `deps`)* | Check the clipboard tools your platform needs, with install hints for anything missing |
 | `clipimg help` | Show the full help screen |

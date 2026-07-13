@@ -12,6 +12,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   `clipimg stop` ends it, and `clipimg status` shows its state.
 - **`clipimg paste` (alias `grab`)** — the one-off capture that prints an image
   path (what `$(clipimg paste)` uses). Accepts `-q, --quiet`.
+- **`clipimg logs`** — show the watcher's activity log, colorized on display; the
+  on-disk `.daemon.log` stays plain text (grep/less friendly).
+- **Clickable images** — `clipimg status` renders each saved image (and the store
+  path) as an OSC 8 `file://` hyperlink you can click to open in the default viewer.
 - **Help on invalid usage** — an unknown command or bad flag now prints the full
   help and exits non-zero; `-h`/`--help`/`help`/`-v` exit 0.
 
