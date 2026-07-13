@@ -117,6 +117,20 @@ function readViaPowerShell(): Buffer | null {
   }
 }
 
+// On WSL, prefer PowerShell but fall back to the native Linux readers when it
+// can't run (Windows interop down → "exec format error"). WSLg bridges the
+// Windows clipboard onto Wayland/X11, so wl-paste/xclip read it without interop.
+function readViaWsl(): Buffer | null {
+  try {
+    return readViaPowerShell();
+  } catch (psErr) {
+    if (process.env.WAYLAND_DISPLAY || process.env.DISPLAY) {
+      return readViaLinux(); // WSLg fallback; its own error is the actionable one here
+    }
+    throw psErr;
+  }
+}
+
 function readViaLinux(): Buffer | null {
   const wayland = Boolean(process.env.WAYLAND_DISPLAY);
   const x11 = Boolean(process.env.DISPLAY);
@@ -189,9 +203,10 @@ end run
 export function readClipboardImage(): Buffer | null {
   const platform = detectPlatform();
   switch (platform) {
-    case 'wsl':
     case 'windows':
       return readViaPowerShell();
+    case 'wsl':
+      return readViaWsl();
     case 'macos':
       return readViaMac();
     case 'linux':

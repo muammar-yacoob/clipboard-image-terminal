@@ -139,14 +139,32 @@ function checkMac(): ToolCheck[] {
   ];
 }
 
+function checkWsl(): ToolCheck[] {
+  const checks: ToolCheck[] = [checkPowerShell()];
+  // WSLg bridges the Windows clipboard to Wayland/X11, so wl-paste/xclip can read
+  // it even when Windows interop is down — clipimg falls back to them.
+  if (process.env.WAYLAND_DISPLAY || process.env.DISPLAY) {
+    checks.push({
+      role: 'WSLg fallback (reads the clipboard when interop is down)',
+      name: 'wl-paste / xclip',
+      required: false,
+      status: onPath('wl-paste') || onPath('xclip') ? 'ok' : 'missing',
+      hint: 'Install wl-clipboard (or xclip) so clipimg reads the clipboard via WSLg while Windows interop is broken.',
+    });
+  }
+  return checks;
+}
+
 /** Probe the current platform's clipboard tools and report their status. */
 export function runDoctor(): DoctorReport {
   const platform = detectPlatform();
   let checks: ToolCheck[];
   switch (platform) {
-    case 'wsl':
     case 'windows':
       checks = [checkPowerShell()];
+      break;
+    case 'wsl':
+      checks = checkWsl();
       break;
     case 'macos':
       checks = checkMac();
@@ -155,6 +173,9 @@ export function runDoctor(): DoctorReport {
       checks = checkLinux();
       break;
   }
-  const ok = checks.every((c) => !c.required || c.status === 'ok');
+  // On WSL, capture works if EITHER PowerShell or the WSLg fallback works.
+  const ok = platform === 'wsl'
+    ? checks.some((c) => c.status === 'ok')
+    : checks.every((c) => !c.required || c.status === 'ok');
   return { platform, checks, ok };
 }

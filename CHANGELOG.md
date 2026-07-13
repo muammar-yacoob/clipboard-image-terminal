@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 ## [Unreleased]
 
 ### Added
+- **WSL clipboard fallback via WSLg** — when Windows interop is down (`powershell.exe`
+  fails with "exec format error"), clipimg now reads the clipboard through the
+  WSLg-bridged Wayland/X11 clipboard (`wl-paste`/`xclip`), so it keeps working
+  without an interop fix. `clipimg doctor` reports which path is active.
 - **Background clipboard watcher** — bare `clipimg` now starts a detached daemon
   that polls the clipboard and auto-saves each new image to the store; running it
   again reports `already running` with the pid, uptime, and image count.

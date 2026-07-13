@@ -26,6 +26,9 @@ function getVersion(): string {
 // "image" / "images" for a count.
 const plural = (n: number): string => (n === 1 ? 'image' : 'images');
 
+// The store folder shown as a clickable "clipimg" link (opens it in a file browser).
+const storeLink = (dir: string): string => hyperlink(`file://${dir}`, fmt.cyan('clipimg'));
+
 // #1e9bd7 — the extension's gallery-banner blue, reused for the `[img #n]` badge.
 const BRAND: [number, number, number] = [30, 155, 215];
 
@@ -113,7 +116,7 @@ function startCmd(opts: { dir: string }): void {
   if (res.started) {
     console.log(
       `${fmt.green('✓')} started ${fmt.dim('·')} PID ${fmt.bold(String(res.pid))} ` +
-      `${fmt.dim('·')} watching clipboard ${fmt.dim(`→ ${opts.dir}`)}`,
+      `${fmt.dim('·')} watching clipboard ${fmt.dim('→')} ${storeLink(opts.dir)}`,
     );
     console.log(fmt.dim('  auto-saves new images · `clipimg status` to list · `clipimg stop` to end'));
   } else {
@@ -144,7 +147,7 @@ function showStatus(opts: { dir: string }): void {
   const now = Date.now();
 
   console.log();
-  console.log(`${fmt.magenta('◆')} ${fmt.bold('clipimg')}  ${fmt.dim('·')}  ${hyperlink(`file://${store.dir}`, fmt.cyan(store.dir))}`);
+  console.log(`${fmt.magenta('◆')} ${storeLink(store.dir)} ${fmt.dim('store')}`);
   if (daemon.running) {
     const up = daemon.startedAtMs ? humanDuration(now - daemon.startedAtMs) : '?';
     console.log(`  ${fmt.green('●')} watcher running ${fmt.dim('·')} PID ${fmt.bold(String(daemon.pid))} ${fmt.dim('·')} up ${up}`);
@@ -184,14 +187,14 @@ function showStatus(opts: { dir: string }): void {
 function clearCmd(opts: { dir: string }): void {
   const before = readStore(opts.dir);
   if (before.count === 0) {
-    console.log(fmt.yellow(`Store already empty · ${opts.dir}`));
+    console.log(`${fmt.yellow('Store already empty')} ${fmt.dim('·')} ${storeLink(opts.dir)}`);
     return;
   }
   const res = clearStore(opts.dir);
   const noun = plural(res.removed);
   console.log(
     `${fmt.green('✓')} Cleared ${fmt.bold(String(res.removed))} ${noun} ` +
-    `${fmt.dim('·')} freed ${humanSize(res.freedBytes)} ${fmt.dim('·')} ${fmt.dim(opts.dir)}`,
+    `${fmt.dim('·')} freed ${humanSize(res.freedBytes)} ${fmt.dim('·')} ${storeLink(opts.dir)}`,
   );
   console.log(fmt.dim('  paste counter reset to 0'));
 }
@@ -200,7 +203,7 @@ function clearCmd(opts: { dir: string }): void {
 function logsCmd(opts: { dir: string }): void {
   const lines = readDaemonLog(opts.dir);
   if (lines.length === 0) {
-    console.log(fmt.yellow(`No watcher log yet · ${opts.dir}`));
+    console.log(`${fmt.yellow('No watcher log yet')} ${fmt.dim('·')} ${storeLink(opts.dir)}`);
     return;
   }
   for (const line of lines) {
@@ -237,8 +240,8 @@ function doctorCmd(): void {
   console.log();
   console.log(
     report.ok
-      ? fmt.green('  All required tools are available.')
-      : fmt.yellow('  Some required tools are missing — clipboard capture may not work until they are installed.'),
+      ? fmt.green('  Clipboard capture is available.')
+      : fmt.yellow('  Clipboard capture is unavailable — see the fixes above.'),
   );
   console.log(fmt.dim('  Note: clipimg never auto-installs system packages (that needs root and varies per distro).'));
   process.exit(report.ok ? 0 : 1);

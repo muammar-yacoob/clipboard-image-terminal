@@ -110,6 +110,11 @@ Node.js ≥ 20 (CLI only), plus a clipboard tool for your platform:
 | **macOS** | `osascript` (built-in), or [`pngpaste`](https://github.com/jcsalterego/pngpaste) |
 | **Linux** | `wl-clipboard` (Wayland) or `xclip` (X11) |
 
+On **WSL**, if Windows interop is broken (`.exe`s fail with "exec format error"),
+clipimg falls back to reading the clipboard through **WSLg** — install
+`wl-clipboard` (or `xclip`) and it keeps working without an interop fix. `clipimg
+doctor` shows which path is active.
+
 Compression uses each platform's native resizer — PowerShell on WSL/Windows, the
 built-in `sips` (or ImageMagick) on macOS, ImageMagick on Linux. If none is
 available, the image is still pasted at full size; only the token saving is skipped.
