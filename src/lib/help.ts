@@ -55,9 +55,10 @@ export function showHelp(): void {
   console.log(ex(`clipimg ${cmd('stop')}`, '# stop the watcher'));
   console.log();
   console.log(head('  Requirements'));
-  console.log(`    ${cmd('WSL / Windows')}   powershell.exe ${fmt.dim('(built in — nothing to install)')}`);
-  console.log(`    ${cmd('macOS')}           osascript ${fmt.dim('(built in)')} or pngpaste`);
-  console.log(`    ${cmd('Linux')}           wl-clipboard ${fmt.dim('(Wayland)')} or xclip ${fmt.dim('(X11)')} — run ${cmd('clipimg doctor')}`);
+  console.log(fmt.dim("    clipimg does NOT install these — run `clipimg doctor` to check yours."));
+  console.log(`    ${cmd('WSL / Windows')}   powershell.exe ${fmt.dim('— built in')} ${fmt.dim('(WSL fallback: wl-clipboard via WSLg)')}`);
+  console.log(`    ${cmd('macOS')}           osascript ${fmt.dim('— built in (pngpaste optional)')}`);
+  console.log(`    ${cmd('Linux')}           wl-clipboard ${fmt.dim('(Wayland)')} or xclip ${fmt.dim('(X11)')} ${fmt.dim('— via your package manager')}`);
   console.log();
   console.log(fmt.dim('  Tip: inside VS Code, install the companion extension and press Ctrl+Alt+V'));
   console.log(fmt.dim('       to paste the image path straight into the terminal.'));
