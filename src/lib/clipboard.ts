@@ -131,25 +131,79 @@ function readViaWsl(): Buffer | null {
   }
 }
 
+// A clipboard reader for a Linux display server: list the MIME types on offer,
+// then fetch the bytes of a chosen one.
+type ClipboardReader = { listTypes(): string[]; read(mime: string): Buffer };
+
+const splitLines = (s: string): string[] => s.split('\n').map((l) => l.trim()).filter(Boolean);
+
+const wlPasteReader: ClipboardReader = {
+  listTypes: () => splitLines(
+    execFileSync('wl-paste', ['--list-types'], { encoding: 'utf8', timeout: TIMEOUT }),
+  ),
+  read: (mime) => execFileSync('wl-paste', ['--no-newline', '--type', mime], BIN_OPTS),
+};
+
+const xclipReader: ClipboardReader = {
+  listTypes: () => splitLines(
+    execFileSync('xclip', ['-selection', 'clipboard', '-t', 'TARGETS', '-o'], { encoding: 'utf8', timeout: TIMEOUT }),
+  ),
+  read: (mime) => execFileSync('xclip', ['-selection', 'clipboard', '-t', mime, '-o'], BIN_OPTS),
+};
+
+// Prefer PNG; otherwise take any offered image type (Windows/WSLg offers image/bmp).
+function pickImageType(types: string[]): string | null {
+  return types.includes('image/png') ? 'image/png' : types.find((t) => t.startsWith('image/')) ?? null;
+}
+
+// Convert non-PNG clipboard bytes (e.g. a WSLg BMP) to PNG via ImageMagick.
+// `-strip` drops the date/time metadata ImageMagick would otherwise embed, so the
+// same source always yields byte-identical PNG — keeping the content-hash dedup
+// working (without it, the watcher re-saves the same image every poll).
+function convertToPng(buf: Buffer, mime: string): Buffer {
+  const srcFmt = mime.split('/')[1] ?? 'bmp';
+  for (const bin of ['magick', 'convert']) {
+    try {
+      return execFileSync(bin, [`${srcFmt}:-`, '-strip', 'png:-'], {
+        input: buf, timeout: TIMEOUT, maxBuffer: MAX_BUFFER, encoding: 'buffer', stdio: ['pipe', 'pipe', 'ignore'],
+      });
+    } catch (err: unknown) {
+      if ((err as { code?: string }).code !== 'ENOENT') throw err; // tool ran but failed
+    }
+  }
+  throw new Error(`clipboard holds a ${mime} image; install ImageMagick to convert it to PNG.`);
+}
+
+/**
+ * Read the clipboard image on Linux/WSLg. The clipboard may only offer a non-PNG
+ * type (Windows hands WSLg an image/bmp), so negotiate the best available image
+ * type and convert it to PNG when needed.
+ */
 function readViaLinux(): Buffer | null {
   const wayland = Boolean(process.env.WAYLAND_DISPLAY);
   const x11 = Boolean(process.env.DISPLAY);
 
-  // Match the tool to the session so a broken cross-tool can't muddy detection:
-  // wl-paste for Wayland, xclip for X11. When the session type is unknown
-  // (neither display var set) we try both, as before.
-  const attempts: Array<[string, string[]]> = [];
-  if (wayland || !x11) attempts.push(['wl-paste', ['--no-newline', '--type', 'image/png']]);
-  if (x11 || !wayland) attempts.push(['xclip', ['-selection', 'clipboard', '-t', 'image/png', '-o']]);
+  // Match the tool to the session: wl-paste for Wayland, xclip for X11. When the
+  // session type is unknown (neither display var set) we try both.
+  const readers: ClipboardReader[] = [];
+  if (wayland || !x11) readers.push(wlPasteReader);
+  if (x11 || !wayland) readers.push(xclipReader);
 
   let present = false;
-  for (const [bin, args] of attempts) {
+  for (const reader of readers) {
+    let types: string[];
     try {
-      const out = execFileSync(bin, args, BIN_OPTS);
-      return out.length ? out : null;
+      types = reader.listTypes();
     } catch (err: unknown) {
-      if ((err as { code?: string }).code !== 'ENOENT') present = true; // ran but no image
+      if ((err as { code?: string }).code !== 'ENOENT') present = true; // installed but failed
+      continue;
     }
+    present = true;
+    const mime = pickImageType(types);
+    if (!mime) continue; // this reader has no image on the clipboard
+    const raw = reader.read(mime);
+    if (!raw.length) continue;
+    return mime === 'image/png' ? raw : convertToPng(raw, mime);
   }
 
   if (!present) {
@@ -159,7 +213,7 @@ function readViaLinux(): Buffer | null {
       : 'wl-clipboard (Wayland) or xclip (X11)';
     throw new Error(`No clipboard tool found. Install ${tool}, then copy an image.`);
   }
-  return null; // tool present, but no image on clipboard
+  return null; // tool present, but no image on the clipboard
 }
 
 function readViaMac(): Buffer | null {

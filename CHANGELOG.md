@@ -10,6 +10,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   fails with "exec format error"), clipimg now reads the clipboard through the
   WSLg-bridged Wayland/X11 clipboard (`wl-paste`/`xclip`), so it keeps working
   without an interop fix. `clipimg doctor` reports which path is active.
+- **Clipboard image-type negotiation** — the Linux/WSLg reader now picks the best
+  offered image type instead of assuming PNG (Windows hands WSLg an `image/bmp`)
+  and converts it to PNG via ImageMagick. This is what makes real Windows image
+  copies capture on WSL.
 - **Background clipboard watcher** — bare `clipimg` now starts a detached daemon
   that polls the clipboard and auto-saves each new image to the store; running it
   again reports `already running` with the pid, uptime, and image count.
