@@ -326,6 +326,11 @@ function pruneOldImages(outputDir: string): void {
   } catch { /* dir not readable yet */ }
 }
 
+/** Short content hash (first 16 hex of sha256) — used to name and dedupe images. */
+export function shortHash(buf: Buffer): string {
+  return createHash('sha256').update(buf).digest('hex').slice(0, 16);
+}
+
 /**
  * Save image bytes to `outputDir`, named by a short content hash. Re-saving
  * identical bytes is skipped. Returns the absolute file path.
@@ -334,7 +339,7 @@ export function saveImage(buf: Buffer, outputDir: string = DEFAULT_OUTPUT_DIR): 
   mkdirSync(outputDir, { recursive: true });
   pruneOldImages(outputDir);
 
-  const hash = createHash('sha256').update(buf).digest('hex').slice(0, 16);
+  const hash = shortHash(buf);
   const filePath = join(outputDir, `${hash}.png`);
 
   if (!existsSync(filePath)) {

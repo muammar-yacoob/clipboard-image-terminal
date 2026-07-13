@@ -23,6 +23,9 @@ function getVersion(): string {
   }
 }
 
+// "image" / "images" for a count.
+const plural = (n: number): string => (n === 1 ? 'image' : 'images');
+
 // #1e9bd7 — the extension's gallery-banner blue, reused for the `[img #n]` badge.
 const BRAND: [number, number, number] = [30, 155, 215];
 
@@ -116,7 +119,7 @@ function startCmd(opts: { dir: string }): void {
   } else {
     const store = readStore(opts.dir);
     const up = res.startedAtMs ? humanDuration(Date.now() - res.startedAtMs) : '?';
-    const noun = store.count === 1 ? 'image' : 'images';
+    const noun = plural(store.count);
     console.log(
       `${fmt.yellow('●')} already running ${fmt.dim('·')} PID ${fmt.bold(String(res.pid))} ` +
       `${fmt.dim('·')} up ${up} ${fmt.dim('·')} ${store.count} ${noun}`,
@@ -148,7 +151,7 @@ function showStatus(opts: { dir: string }): void {
   } else {
     console.log(`  ${fmt.dim('○ watcher not running — start it by running `clipimg`')}`);
   }
-  const noun = store.count === 1 ? 'image' : 'images';
+  const noun = plural(store.count);
   const counter = store.counter !== null ? ` ${fmt.dim('·')} ${fmt.dim(`#${store.counter} pastes`)}` : '';
   console.log(`  ${fmt.bold(String(store.count))} ${noun} ${fmt.dim('·')} ${humanSize(store.totalBytes)} on disk${counter}`);
 
@@ -184,7 +187,7 @@ function clearCmd(opts: { dir: string }): void {
     return;
   }
   const res = clearStore(opts.dir);
-  const noun = res.removed === 1 ? 'image' : 'images';
+  const noun = plural(res.removed);
   console.log(
     `${fmt.green('✓')} Cleared ${fmt.bold(String(res.removed))} ${noun} ` +
     `${fmt.dim('·')} freed ${humanSize(res.freedBytes)} ${fmt.dim('·')} ${fmt.dim(opts.dir)}`,

@@ -9,12 +9,13 @@
  * State is a single `.daemon.pid` file in the store dir holding "<pid> <startedAtMs>",
  * and the watcher appends activity to `.daemon.log`.
  */
-import { createHash } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { appendFileSync, mkdirSync, openSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
-import { compressImage, DEFAULT_OUTPUT_DIR, readClipboardImage, saveImage } from './clipboard';
+import {
+  compressImage, DEFAULT_OUTPUT_DIR, readClipboardImage, saveImage, shortHash,
+} from './clipboard';
 
 const PID_FILE = '.daemon.pid';
 const LOG_FILE = '.daemon.log';
@@ -130,7 +131,7 @@ export function runWatchLoop(dir: string = DEFAULT_OUTPUT_DIR): void {
       if (!raw) return;
       // Hash the raw bytes so re-reading an unchanged clipboard is a cheap no-op
       // (skips recompressing/rehashing). saveImage still dedups on disk.
-      const hash = createHash('sha256').update(raw).digest('hex').slice(0, 16);
+      const hash = shortHash(raw);
       if (hash === lastHash) return;
       lastHash = hash;
       const filePath = saveImage(compressImage(raw), dir);
