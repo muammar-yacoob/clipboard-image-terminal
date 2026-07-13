@@ -24,18 +24,18 @@ export function showHelp(): void {
   console.log(`  ${head('Usage:')} clipimg ${cmd('[command]')} ${opt('[options]')}`);
   console.log();
   console.log(
-    fmt.dim('  Run bare `clipimg` to start a background watcher that auto-saves clipboard'),
+    fmt.dim('  Run bare `clipimg` to capture the clipboard image and print its path.'),
   );
   console.log(
-    fmt.dim('  images to the store. Use `paste` for a one-off capture that prints a path.'),
+    fmt.dim('  Add `watch` to auto-save new images in the background.'),
   );
   console.log();
   console.log(head('  Commands'));
-  console.log(`    ${pad(cmd('(default)'), 23)}Start the clipboard watcher (or report it's running)`);
-  console.log(`    ${pad(`${cmd('paste')} ${fmt.dim('(grab)')}`, 23)}Capture the clipboard image once and print its path`);
-  console.log(`    ${pad(cmd('stop'), 23)}Stop the clipboard watcher`);
-  console.log(`    ${pad(`${cmd('status')} ${fmt.dim('(ls)')}`, 23)}Show watcher state + the saved-image store`);
-  console.log(`    ${pad(cmd('logs'), 23)}Show the watcher activity log (colorized)`);
+  console.log(`    ${pad(cmd('(default)'), 23)}Save the clipboard image and print its path`);
+  console.log(`    ${pad(cmd('watch'), 23)}Start a background watcher that auto-saves images`);
+  console.log(`    ${pad(cmd('stop'), 23)}Stop the background watcher`);
+  console.log(`    ${pad(`${cmd('status')} ${fmt.dim('(ls)')}`, 23)}Show the store (and watcher state, if running)`);
+  console.log(`    ${pad(cmd('logs'), 23)}Show the watcher activity log (with [img #n])`);
   console.log(`    ${pad(`${cmd('clear')} ${fmt.dim('(clean)')}`, 23)}Delete all saved images and reset the counter`);
   console.log(`    ${pad(`${cmd('doctor')} ${fmt.dim('(deps)')}`, 23)}Check the clipboard tools this platform needs`);
   console.log(`    ${pad(cmd('help'), 23)}Show this help screen`);
@@ -48,10 +48,10 @@ export function showHelp(): void {
   console.log();
   console.log(head('  Examples'));
   const ex = (usage: string, note: string): string => `    ${$} ${pad(usage, 36)}${comment(note)}`;
-  console.log(ex('clipimg', '# start the background watcher'));
-  console.log(ex(`clipimg ${cmd('paste')}`, '# capture once, print the path'));
-  console.log(ex(`claude "look at $(clipimg ${cmd('paste')})"`, '# feed the image to an AI tool'));
-  console.log(ex(`clipimg ${cmd('status')}`, '# watcher state + saved images'));
+  console.log(ex('clipimg', '# capture clipboard, print the path'));
+  console.log(ex(`claude "look at $(clipimg)"`, '# feed the image to an AI tool'));
+  console.log(ex(`clipimg ${cmd('watch')}`, '# auto-save new images in the background'));
+  console.log(ex(`clipimg ${cmd('logs')}`, '# watcher activity, with [img #n]'));
   console.log(ex(`clipimg ${cmd('stop')}`, '# stop the watcher'));
   console.log();
   console.log(head('  Requirements'));

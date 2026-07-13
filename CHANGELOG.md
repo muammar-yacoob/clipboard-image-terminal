@@ -28,9 +28,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   help and exits non-zero; `-h`/`--help`/`help`/`-v` exit 0.
 
 ### Changed
-- **BREAKING: bare `clipimg` starts the watcher** instead of capturing. The
-  capture-and-print-path behavior moved to `clipimg paste`, so update pipelines
-  from `$(clipimg)` to `$(clipimg paste)`.
+- **Bare `clipimg` captures and prints its path**, showing the `[img #n]` line —
+  the long-standing behavior, restored after it was briefly the watcher. The
+  background watcher is now an explicit `clipimg watch` (with `clipimg stop`),
+  and its captures log `[img #n]` too. `paste`/`grab` remain aliases of the
+  default, so `$(clipimg)` and `$(clipimg paste)` both work.
 - **`-d, --dir` works before or after a subcommand** (`clipimg -d X status` and
   `clipimg status -d X` are equivalent).
 

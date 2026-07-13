@@ -36,23 +36,21 @@ AI coding tools (Claude Code, Aider, etc.) can't see an image you copy until it'
 
 ```sh
 npm install -g clipboard-image-terminal
-claude "look at $(clipimg paste)"   # copy an image first, then run this
+claude "look at $(clipimg)"   # copy an image first, then run this
 ```
 
-`clipimg paste` prints just the saved path to stdout (pipe-friendly). Useful flags: `-d ./shots` (custom dir), `-q` (path only).
+`clipimg` prints the saved path to stdout (pipe-friendly) and a colorful `[img #n]` line to stderr. Useful flags: `-d ./shots` (custom dir), `-q` (path only).
 
-> **Two ways to use it.** Run bare `clipimg` to start a **background watcher**
-> that auto-saves every new clipboard image into the store; run it again to see
-> it's already running, and `clipimg stop` to end it. Or skip the watcher and use
-> `clipimg paste` for a one-off capture that prints a path — that's what `$(...)`
-> uses.
+> **Optional background watcher.** Bare `clipimg` captures once. To auto-save
+> every new clipboard image in the background, run `clipimg watch` (and `clipimg
+> stop` to end it); its captures show up in `clipimg logs` as `[img #n]` lines.
 
 ### 📦 Commands
 
 | Command | What it does |
 |---|---|
-| `clipimg` | Start the background clipboard watcher (or report it's already running) |
-| `clipimg paste` *(alias `grab`)* | Capture the clipboard image once and print its path |
+| `clipimg` *(alias `paste`, `grab`)* | Capture the clipboard image and print its path (with an `[img #n]` line) |
+| `clipimg watch` | Start a background watcher that auto-saves each new clipboard image |
 | `clipimg stop` | Stop the background watcher |
 | `clipimg status` *(alias `ls`)* | Show watcher state + the store: count, total size, and each image's dimensions, size, age, tokens, a thumbnail where supported, and a clickable `file://` link |
 | `clipimg logs` | Show the watcher's activity log, colorized (the on-disk log stays plain) |

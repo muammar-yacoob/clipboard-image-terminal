@@ -272,21 +272,28 @@ function runCli(argv: string[]): void {
 
   program
     .name('clipimg')
-    .description('Watch the clipboard and auto-save images; `paste` captures one and prints its path')
+    .description('Save the clipboard image to a file and print its path (WSL, macOS, Linux)')
     .version(getVersion(), '-v, --version')
-    .option('-d, --dir <path>', 'store directory', DEFAULT_OUTPUT_DIR)
-    .action((opts: { dir: string }) => startCmd(opts));
+    .option('-d, --dir <path>', 'output directory', DEFAULT_OUTPUT_DIR)
+    .option('-q, --quiet', 'suppress the staged UI and preview; print only the path')
+    .action((opts: { dir: string; quiet?: boolean }) => capture(opts));
 
   program
     .command('paste')
     .alias('grab')
-    .description('Capture the clipboard image once and print its path')
-    .option('-d, --dir <path>', 'store directory')
+    .description('Alias for the default: capture the clipboard image and print its path')
+    .option('-d, --dir <path>', 'output directory')
     .option('-q, --quiet', 'suppress the staged UI and preview; print only the path')
     .action((_opts: unknown, cmd: Command) => {
       const o = cmd.optsWithGlobals();
       capture({ dir: o.dir as string, quiet: o.quiet as boolean | undefined });
     });
+
+  program
+    .command('watch')
+    .description('Start a background watcher that auto-saves each new clipboard image')
+    .option('-d, --dir <path>', 'output directory')
+    .action((_opts: unknown, cmd: Command) => startCmd(subDir(cmd)));
 
   program
     .command('stop')
