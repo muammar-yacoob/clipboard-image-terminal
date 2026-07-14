@@ -172,7 +172,7 @@ export function runWatchLoop(dir: string = DEFAULT_OUTPUT_DIR): void {
       const n = bumpPasteCounter(dir);
       const s = summarizePaste(raw, finalBuf);
       const meta = s ? `${s.width}×${s.height} · ${humanSize(finalBuf.length)} · ~${s.tokens} tok` : humanSize(finalBuf.length);
-      log(`[img #${n}] saved ${meta} → ${filePath}`);
+      log(`Img #${n} saved ${meta} → ${filePath}`);
     } catch (err: unknown) {
       if (!erroring) {
         erroring = true;

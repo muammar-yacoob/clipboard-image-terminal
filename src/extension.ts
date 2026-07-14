@@ -34,7 +34,7 @@ async function saveClipboardImage(raw: Buffer, dir: string | undefined): Promise
 // A colorful, self-dismissing `[img #n]` confirmation in the status bar.
 function showPasted(n: number, summary: PasteSummary | null): void {
   const item = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, -1);
-  const bits = [`$(file-media) [img #${n}]`];
+  const bits = [`$(file-media) Img #${n}`];
   if (summary) {
     bits.push(`~${summary.tokens} tok`);
     if (summary.savedTokens > 0) bits.push(`↓ saved ~${summary.savedTokens}`);
