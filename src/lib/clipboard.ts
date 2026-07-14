@@ -117,14 +117,43 @@ function readViaPowerShell(): Buffer | null {
   }
 }
 
-// On WSL, prefer PowerShell but fall back to the native Linux readers when it
-// can't run (Windows interop down → "exec format error"). WSLg bridges the
-// Windows clipboard onto Wayland/X11, so wl-paste/xclip read it without interop.
+// WSLg exposes the Windows-bridged Wayland clipboard at a fixed socket. It's
+// present on all modern WSL2 installs regardless of interop state.
+const WSLG_RUNTIME_DIR = '/mnt/wslg/runtime-dir';
+
+// wl-paste/xclip need WAYLAND_DISPLAY/DISPLAY *and* an XDG_RUNTIME_DIR that holds
+// the display socket. A login shell inherits these, but the contexts that need
+// the fallback most — VS Code's extension host, the detached `clipimg watch`
+// daemon, a bare `sh -c` — don't, so wl-paste can't find the WSLg socket even
+// though it's right there. Point the env at WSLg's runtime dir (unless the
+// current one already has the socket) so the fallback can actually connect.
+// Returns true when a WSLg/X11 clipboard looks reachable.
+function ensureWslgDisplayEnv(): boolean {
+  const wayland = process.env.WAYLAND_DISPLAY || 'wayland-0';
+  const wslgSocket = join(WSLG_RUNTIME_DIR, wayland);
+
+  if (existsSync(wslgSocket)) {
+    const runtimeDir = process.env.XDG_RUNTIME_DIR;
+    if (!runtimeDir || !existsSync(join(runtimeDir, wayland))) {
+      process.env.XDG_RUNTIME_DIR = WSLG_RUNTIME_DIR;
+    }
+    process.env.WAYLAND_DISPLAY = wayland;
+    if (!process.env.DISPLAY) process.env.DISPLAY = ':0'; // WSLg's X server, for xclip
+    return true;
+  }
+
+  // No WSLg socket — only usable if a display was already configured (real X11).
+  return Boolean(process.env.WAYLAND_DISPLAY || process.env.DISPLAY);
+}
+
+// On WSL, prefer PowerShell but fall back to WSLg's bridged clipboard when it
+// can't run (Windows interop down → "exec format error"). wl-paste/xclip read
+// the Windows clipboard through WSLg without any interop.
 function readViaWsl(): Buffer | null {
   try {
     return readViaPowerShell();
   } catch (psErr) {
-    if (process.env.WAYLAND_DISPLAY || process.env.DISPLAY) {
+    if (ensureWslgDisplayEnv()) {
       return readViaLinux(); // WSLg fallback; its own error is the actionable one here
     }
     throw psErr;
@@ -299,14 +328,20 @@ export function pngDimensions(buf: Buffer): { width: number; height: number } | 
 function resizeViaTool(buf: Buffer, w: number, h: number): Buffer {
   const platform = detectPlatform();
   if (platform === 'wsl' || platform === 'windows') {
-    const script = PS_RESIZE.replace(/__W__/g, String(w)).replace(/__H__/g, String(h));
-    const b64 = execFileSync('powershell.exe', [
-      '-NoLogo', '-NoProfile', '-NonInteractive', '-Command', script,
-    ], { input: buf.toString('base64'), encoding: 'utf8', timeout: TIMEOUT, maxBuffer: MAX_BUFFER, stdio: ['pipe', 'pipe', 'ignore'] }).trim();
-    return Buffer.from(b64, 'base64');
+    try {
+      const script = PS_RESIZE.replace(/__W__/g, String(w)).replace(/__H__/g, String(h));
+      const b64 = execFileSync('powershell.exe', [
+        '-NoLogo', '-NoProfile', '-NonInteractive', '-Command', script,
+      ], { input: buf.toString('base64'), encoding: 'utf8', timeout: TIMEOUT, maxBuffer: MAX_BUFFER, stdio: ['pipe', 'pipe', 'ignore'] }).trim();
+      return Buffer.from(b64, 'base64');
+    } catch (err) {
+      // Native Windows has no other backend; on WSL, interop may be down (the
+      // same reason capture falls back to WSLg) — drop to ImageMagick below.
+      if (platform === 'windows') throw err;
+    }
   }
 
-  // macOS / Linux: stream PNG through ImageMagick (stdin -> stdout, no temp files).
+  // macOS / Linux / WSL-with-interop-down: stream PNG through ImageMagick (stdin -> stdout, no temp files).
   for (const bin of ['magick', 'convert']) {
     try {
       return execFileSync(bin, ['png:-', '-resize', `${w}x${h}`, 'png:-'], {

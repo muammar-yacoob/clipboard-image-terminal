@@ -5,6 +5,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Fixed
+- **WSLg fallback now works in non-login contexts** — when Windows interop is
+  down, capture fell back to WSLg's `wl-paste`/`xclip` only if `WAYLAND_DISPLAY`
+  or `DISPLAY` was already set. A login shell has them, but the VS Code extension
+  host, the detached `clipimg watch` daemon, and bare `sh -c` invocations don't,
+  so capture threw instead of using the WSLg clipboard sitting right there — the
+  extension logged an `[img #n]` attempt but no path reached the terminal. It now
+  supplies WSLg's standard display env (`XDG_RUNTIME_DIR=/mnt/wslg/runtime-dir`,
+  `WAYLAND_DISPLAY=wayland-0`, `DISPLAY=:0`) so the fallback can connect.
+- **Image compression no longer silently skipped on interop-down WSL** — the
+  PowerShell resize path now falls through to ImageMagick when interop is
+  unavailable, matching how capture already falls back.
+
 ### Added
 - **WSL clipboard fallback via WSLg** — when Windows interop is down (`powershell.exe`
   fails with "exec format error"), clipimg now reads the clipboard through the
