@@ -2,7 +2,7 @@
   "name": "clipboard-image-terminal",
   "displayName": "Clipboard Image to Terminal",
   "description": "Paste clipboard images as file paths into the VS Code terminal. Built for AI coding tools on WSL.",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "publisher": "muammar-yacoob",
   "license": "MIT",
   "repository": {

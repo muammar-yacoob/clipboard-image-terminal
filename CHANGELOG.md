@@ -5,6 +5,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-07-14
+
 ### Added
 - **Wayland clipboard bridge for terminal AI tools (WSL)** — the background watcher
   now republishes Windows clipboard images as `image/png` on the WSLg/Wayland
