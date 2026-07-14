@@ -5,6 +5,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Added
+- **Wayland clipboard bridge for terminal AI tools (WSL)** — the background watcher
+  now republishes Windows clipboard images as `image/png` on the WSLg/Wayland
+  clipboard. Claude Code (a Linux process) reads `image/png` for its native paste,
+  but WSLg only exposes Windows images as undecodable `image/bmp`; the bridge
+  converts and re-publishes them (re-asserting to survive WSLg's reverse-sync
+  clobber). Copy an image in Windows, then press **Alt+V** in Claude Code — no
+  interop, no path-typing. Run `clipimg watch` to enable.
+
 ### Changed
 - **VS Code: `Ctrl+V` in the terminal now pastes clipboard images as paths** — the
   paste command is bound to `Ctrl+V` (the natural keystroke) in addition to

@@ -197,6 +197,39 @@ function pickImageType(types: string[]): string | null {
   return types.includes('image/png') ? 'image/png' : types.find((t) => t.startsWith('image/')) ?? null;
 }
 
+/**
+ * The image MIME types the WSLg/Wayland clipboard currently offers. Used by the
+ * bridge to tell a fresh Windows copy (`image/bmp` only — Claude Code can't
+ * decode it) from a clipboard we've already republished as `image/png`. Empty
+ * array on non-WSL or any failure.
+ */
+export function clipboardImageTypes(): string[] {
+  if (detectPlatform() !== 'wsl') return [];
+  try {
+    if (!ensureWslgDisplayEnv()) return [];
+    ensureToolPath();
+    const types = splitLines(execFileSync('wl-paste', ['--list-types'], { encoding: 'utf8', timeout: TIMEOUT }));
+    return types.filter((t) => t.startsWith('image/'));
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Publish PNG bytes onto the WSLg/Wayland clipboard so a Linux app that reads
+ * `image/png` (e.g. Claude Code's Alt+V paste) can use it. WSLg only exposes
+ * Windows images as `image/bmp`, which such decoders reject — republishing a
+ * real PNG here is the whole trick. `wl-copy` backgrounds itself to serve the
+ * selection, so this returns promptly.
+ */
+export function copyPngToClipboard(buf: Buffer): void {
+  ensureWslgDisplayEnv();
+  ensureToolPath();
+  execFileSync('wl-copy', ['--type', 'image/png'], {
+    input: buf, timeout: TIMEOUT, maxBuffer: MAX_BUFFER, stdio: ['pipe', 'ignore', 'ignore'],
+  });
+}
+
 // Convert non-PNG clipboard bytes (e.g. a WSLg BMP) to PNG via ImageMagick.
 // `-strip` drops the date/time metadata ImageMagick would otherwise embed, so the
 // same source always yields byte-identical PNG — keeping the content-hash dedup

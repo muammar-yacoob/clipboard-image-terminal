@@ -14,14 +14,14 @@ import { appendFileSync, mkdirSync, openSync, readFileSync, unlinkSync, writeFil
 import { join, resolve } from 'node:path';
 
 import {
-  bumpPasteCounter, compressImage, DEFAULT_OUTPUT_DIR, readClipboardImage,
-  saveImage, shortHash, summarizePaste,
+  bumpPasteCounter, clipboardImageTypes, compressImage, copyPngToClipboard,
+  DEFAULT_OUTPUT_DIR, readClipboardImage, saveImage, shortHash, summarizePaste,
 } from './clipboard';
 import { humanSize } from './format';
 
 const PID_FILE = '.daemon.pid';
 const LOG_FILE = '.daemon.log';
-const POLL_MS = 2000;
+const POLL_MS = 1000;
 
 /** Current daemon state derived from the pid file. */
 export type DaemonState = { running: boolean; pid: number | null; startedAtMs: number | null };
@@ -140,6 +140,26 @@ export function runWatchLoop(dir: string = DEFAULT_OUTPUT_DIR): void {
       const raw = readClipboardImage();
       if (erroring) { log('clipboard readable again'); erroring = false; }
       if (!raw) return;
+
+      // Bridge: Claude Code (a Linux app) reads image/png from the Wayland
+      // clipboard, but WSLg only exposes Windows images as image/bmp, which it
+      // can't decode. Whenever the clipboard offers an image but no PNG, publish
+      // our converted PNG so Alt+V can paste it. This also fires each time WSLg
+      // silently clobbers our PNG back to bmp, re-winning the clipboard.
+      const types = clipboardImageTypes();
+      if (types.length && !types.includes('image/png')) {
+        const png = compressImage(raw);
+        try {
+          copyPngToClipboard(png);
+          // WSLg may reverse-sync the Windows bmp once more right after; re-assert
+          // shortly after so the PNG is what's actually on the clipboard.
+          setTimeout(() => { try { copyPngToClipboard(png); } catch { /* best effort */ } }, 600);
+          log('bridged clipboard image → PNG (Alt+V will paste it)');
+        } catch (e) {
+          log(`bridge to PNG failed: ${(e as Error).message}`);
+        }
+      }
+
       // Hash the raw bytes so re-reading an unchanged clipboard is a cheap no-op
       // (skips recompressing/rehashing). saveImage still dedups on disk.
       const hash = shortHash(raw);
