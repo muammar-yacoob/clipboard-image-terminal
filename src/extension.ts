@@ -11,27 +11,23 @@ const tick = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 
 type PasteResult = { filePath: string; summary: PasteSummary | null };
 
-// Walk the capture step-by-step so each stage shows in the progress notification.
-async function pasteWithProgress(
-  progress: vscode.Progress<{ message?: string }>,
-  dir: string | undefined,
-): Promise<PasteResult | null> {
-  progress.report({ message: '$(clippy) Reading clipboard…' });
-  await tick();
-  const raw = readClipboardImage();
-  if (!raw) return null;
-
+// Turn an already-read clipboard image into a saved file. Only the (potentially
+// slow) compression step shows a progress notification — the read already
+// happened, and we don't want a notification flashing on every plain-text paste.
+async function saveClipboardImage(raw: Buffer, dir: string | undefined): Promise<PasteResult> {
   let finalBuf = raw;
   if (needsCompression(raw)) {
-    progress.report({ message: '$(sync~spin) Compressing…' });
-    await tick();
-    finalBuf = compressImage(raw);
+    finalBuf = await vscode.window.withProgress(
+      { location: vscode.ProgressLocation.Notification, title: 'Clipboard image' },
+      async (progress) => {
+        progress.report({ message: '$(sync~spin) Compressing…' });
+        await tick();
+        return compressImage(raw);
+      },
+    );
   }
 
-  progress.report({ message: '$(save) Saving…' });
-  await tick();
   const filePath = saveImage(finalBuf, dir);
-
   return { filePath, summary: summarizePaste(raw, finalBuf) };
 }
 
@@ -55,9 +51,26 @@ function showPasted(n: number, summary: PasteSummary | null): void {
 export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.commands.registerCommand('clipboard-image.paste', async () => {
+      // This is bound to Ctrl+V in the terminal, so it must act like a normal
+      // paste whenever the clipboard isn't an image — otherwise it would swallow
+      // every text paste. Fall through to the built-in terminal paste in that case.
+      const normalPaste = () => vscode.commands.executeCommand('workbench.action.terminal.paste');
+
       const terminal = vscode.window.activeTerminal;
-      if (!terminal) {
-        vscode.window.showWarningMessage('No active terminal');
+
+      // Read first (fast, no UI). A failure here means the capture backend is
+      // broken — surface it, but still paste so the keystroke isn't lost.
+      let raw: Buffer | null;
+      try {
+        raw = readClipboardImage();
+      } catch (err: unknown) {
+        vscode.window.showErrorMessage(`Clipboard image failed: ${errorMessage(err)}`);
+        await normalPaste();
+        return;
+      }
+
+      if (!raw || !terminal) {
+        await normalPaste();
         return;
       }
 
@@ -67,16 +80,7 @@ export function activate(context: vscode.ExtensionContext) {
         ?.trim();
 
       try {
-        const result = await vscode.window.withProgress(
-          { location: vscode.ProgressLocation.Notification, title: 'Clipboard image' },
-          (progress) => pasteWithProgress(progress, dir || undefined),
-        );
-
-        if (!result) {
-          vscode.window.showInformationMessage('No image on clipboard');
-          return;
-        }
-
+        const result = await saveClipboardImage(raw, dir || undefined);
         terminal.sendText(result.filePath, false);
         showPasted(bumpPasteCounter(dir || undefined), result.summary);
       } catch (err: unknown) {
