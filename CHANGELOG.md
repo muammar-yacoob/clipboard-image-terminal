@@ -5,6 +5,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-07-14
+
+### Fixed
+- **VS Code extension no longer hijacks `Ctrl+V` in the terminal.** The paste
+  command reverts to `Ctrl+Alt+V` only. Binding it to `Ctrl+V` intercepted every
+  normal terminal paste, which is unnecessary now that the recommended WSL flow is
+  the Wayland PNG bridge plus Claude Code's native **Alt+V**. Ctrl+V pastes
+  normally again.
+
 ## [0.3.0] - 2026-07-14
 
 ### Added
