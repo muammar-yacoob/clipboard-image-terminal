@@ -59,7 +59,7 @@ function onEvent(event: CaptureEvent): PasteSummary | void {
 // The colorful `[img #n]` result line, e.g.
 //   ◆ [img #3]  ~420 tok · 1024×768 · 42.0 KB  ↓ saved ~1148 (73%)
 function pastedLine(n: number, filePath: string, s: PasteSummary | undefined): string {
-  const badge = fmt.bold(fmt.rgb(...BRAND, `[img #${n}]`));
+  const badge = fmt.bold(fmt.rgb(...BRAND, `Img #${n}`));
   const parts = [fmt.magenta('◆'), badge];
 
   if (s) {
@@ -119,6 +119,7 @@ function startCmd(opts: { dir: string }): void {
       `${fmt.dim('·')} watching clipboard ${fmt.dim('→')} ${storeLink(opts.dir)}`,
     );
     console.log(fmt.dim('  auto-saves new images · `clipimg status` to list · `clipimg stop` to end'));
+    console.log(fmt.dim('  copy an image in Windows, then press ') + fmt.bold('Alt+V') + fmt.dim(' in Claude Code to paste it'));
   } else {
     const store = readStore(opts.dir);
     const up = res.startedAtMs ? humanDuration(Date.now() - res.startedAtMs) : '?';
@@ -211,7 +212,7 @@ function logsCmd(opts: { dir: string }): void {
     const ts = m ? fmt.dim(m[1]) : '';
     const msg = m ? m[2] : line;
     // A captured-image line gets the same brand-colored `[img #n]` badge as `paste`.
-    const img = msg.match(/^(\[img #\d+\])\s*(.*)$/);
+    const img = msg.match(/^(Img #\d+)\s*(.*)$/);
     let painted: string;
     if (img) {
       painted = `${fmt.bold(fmt.rgb(...BRAND, img[1]))} ${fmt.green(img[2])}`;
