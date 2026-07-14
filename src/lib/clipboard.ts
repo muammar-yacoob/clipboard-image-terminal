@@ -63,9 +63,9 @@ const BIN_OPTS: ExecFileSyncOptionsWithBufferEncoding = {
   encoding: 'buffer',
 };
 
-type Platform = 'wsl' | 'windows' | 'macos' | 'linux';
+export type Platform = 'wsl' | 'windows' | 'macos' | 'linux';
 
-function detectPlatform(): Platform {
+export function detectPlatform(): Platform {
   if (process.platform === 'darwin') return 'macos';
   if (process.platform === 'win32') return 'windows';
   if (process.env.WSL_DISTRO_NAME) return 'wsl';
@@ -108,29 +108,131 @@ function readViaPowerShell(): Buffer | null {
     return b64 ? Buffer.from(b64, 'base64') : null;
   } catch (err: unknown) {
     if ((err as { status?: number }).status === 1) return null; // no image on clipboard
-    throw err;
+    // Any other failure means powershell.exe couldn't run at all (commonly WSL
+    // Windows-interop being down). Surface a short, actionable message instead
+    // of letting execFileSync leak the entire command + embedded script.
+    throw new Error(
+      'could not read the Windows clipboard via powershell.exe — on WSL this usually means Windows interop is down. Run `clipimg doctor`.',
+    );
   }
 }
 
+// WSLg exposes the Windows-bridged Wayland clipboard at a fixed socket. It's
+// present on all modern WSL2 installs regardless of interop state.
+const WSLG_RUNTIME_DIR = '/mnt/wslg/runtime-dir';
+
+// wl-paste/xclip need WAYLAND_DISPLAY/DISPLAY *and* an XDG_RUNTIME_DIR that holds
+// the display socket. A login shell inherits these, but the contexts that need
+// the fallback most — VS Code's extension host, the detached `clipimg watch`
+// daemon, a bare `sh -c` — don't, so wl-paste can't find the WSLg socket even
+// though it's right there. Point the env at WSLg's runtime dir (unless the
+// current one already has the socket) so the fallback can actually connect.
+// Returns true when a WSLg/X11 clipboard looks reachable.
+function ensureWslgDisplayEnv(): boolean {
+  const wayland = process.env.WAYLAND_DISPLAY || 'wayland-0';
+  const wslgSocket = join(WSLG_RUNTIME_DIR, wayland);
+
+  if (existsSync(wslgSocket)) {
+    const runtimeDir = process.env.XDG_RUNTIME_DIR;
+    if (!runtimeDir || !existsSync(join(runtimeDir, wayland))) {
+      process.env.XDG_RUNTIME_DIR = WSLG_RUNTIME_DIR;
+    }
+    process.env.WAYLAND_DISPLAY = wayland;
+    if (!process.env.DISPLAY) process.env.DISPLAY = ':0'; // WSLg's X server, for xclip
+    return true;
+  }
+
+  // No WSLg socket — only usable if a display was already configured (real X11).
+  return Boolean(process.env.WAYLAND_DISPLAY || process.env.DISPLAY);
+}
+
+// On WSL, prefer PowerShell but fall back to WSLg's bridged clipboard when it
+// can't run (Windows interop down → "exec format error"). wl-paste/xclip read
+// the Windows clipboard through WSLg without any interop.
+function readViaWsl(): Buffer | null {
+  try {
+    return readViaPowerShell();
+  } catch (psErr) {
+    if (ensureWslgDisplayEnv()) {
+      return readViaLinux(); // WSLg fallback; its own error is the actionable one here
+    }
+    throw psErr;
+  }
+}
+
+// A clipboard reader for a Linux display server: list the MIME types on offer,
+// then fetch the bytes of a chosen one.
+type ClipboardReader = { listTypes(): string[]; read(mime: string): Buffer };
+
+const splitLines = (s: string): string[] => s.split('\n').map((l) => l.trim()).filter(Boolean);
+
+const wlPasteReader: ClipboardReader = {
+  listTypes: () => splitLines(
+    execFileSync('wl-paste', ['--list-types'], { encoding: 'utf8', timeout: TIMEOUT }),
+  ),
+  read: (mime) => execFileSync('wl-paste', ['--no-newline', '--type', mime], BIN_OPTS),
+};
+
+const xclipReader: ClipboardReader = {
+  listTypes: () => splitLines(
+    execFileSync('xclip', ['-selection', 'clipboard', '-t', 'TARGETS', '-o'], { encoding: 'utf8', timeout: TIMEOUT }),
+  ),
+  read: (mime) => execFileSync('xclip', ['-selection', 'clipboard', '-t', mime, '-o'], BIN_OPTS),
+};
+
+// Prefer PNG; otherwise take any offered image type (Windows/WSLg offers image/bmp).
+function pickImageType(types: string[]): string | null {
+  return types.includes('image/png') ? 'image/png' : types.find((t) => t.startsWith('image/')) ?? null;
+}
+
+// Convert non-PNG clipboard bytes (e.g. a WSLg BMP) to PNG via ImageMagick.
+// `-strip` drops the date/time metadata ImageMagick would otherwise embed, so the
+// same source always yields byte-identical PNG — keeping the content-hash dedup
+// working (without it, the watcher re-saves the same image every poll).
+function convertToPng(buf: Buffer, mime: string): Buffer {
+  const srcFmt = mime.split('/')[1] ?? 'bmp';
+  for (const bin of ['magick', 'convert']) {
+    try {
+      return execFileSync(bin, [`${srcFmt}:-`, '-strip', 'png:-'], {
+        input: buf, timeout: TIMEOUT, maxBuffer: MAX_BUFFER, encoding: 'buffer', stdio: ['pipe', 'pipe', 'ignore'],
+      });
+    } catch (err: unknown) {
+      if ((err as { code?: string }).code !== 'ENOENT') throw err; // tool ran but failed
+    }
+  }
+  throw new Error(`clipboard holds a ${mime} image; install ImageMagick to convert it to PNG.`);
+}
+
+/**
+ * Read the clipboard image on Linux/WSLg. The clipboard may only offer a non-PNG
+ * type (Windows hands WSLg an image/bmp), so negotiate the best available image
+ * type and convert it to PNG when needed.
+ */
 function readViaLinux(): Buffer | null {
   const wayland = Boolean(process.env.WAYLAND_DISPLAY);
   const x11 = Boolean(process.env.DISPLAY);
 
-  // Match the tool to the session so a broken cross-tool can't muddy detection:
-  // wl-paste for Wayland, xclip for X11. When the session type is unknown
-  // (neither display var set) we try both, as before.
-  const attempts: Array<[string, string[]]> = [];
-  if (wayland || !x11) attempts.push(['wl-paste', ['--no-newline', '--type', 'image/png']]);
-  if (x11 || !wayland) attempts.push(['xclip', ['-selection', 'clipboard', '-t', 'image/png', '-o']]);
+  // Match the tool to the session: wl-paste for Wayland, xclip for X11. When the
+  // session type is unknown (neither display var set) we try both.
+  const readers: ClipboardReader[] = [];
+  if (wayland || !x11) readers.push(wlPasteReader);
+  if (x11 || !wayland) readers.push(xclipReader);
 
   let present = false;
-  for (const [bin, args] of attempts) {
+  for (const reader of readers) {
+    let types: string[];
     try {
-      const out = execFileSync(bin, args, BIN_OPTS);
-      return out.length ? out : null;
+      types = reader.listTypes();
     } catch (err: unknown) {
-      if ((err as { code?: string }).code !== 'ENOENT') present = true; // ran but no image
+      if ((err as { code?: string }).code !== 'ENOENT') present = true; // installed but failed
+      continue;
     }
+    present = true;
+    const mime = pickImageType(types);
+    if (!mime) continue; // this reader has no image on the clipboard
+    const raw = reader.read(mime);
+    if (!raw.length) continue;
+    return mime === 'image/png' ? raw : convertToPng(raw, mime);
   }
 
   if (!present) {
@@ -140,7 +242,7 @@ function readViaLinux(): Buffer | null {
       : 'wl-clipboard (Wayland) or xclip (X11)';
     throw new Error(`No clipboard tool found. Install ${tool}, then copy an image.`);
   }
-  return null; // tool present, but no image on clipboard
+  return null; // tool present, but no image on the clipboard
 }
 
 function readViaMac(): Buffer | null {
@@ -184,9 +286,10 @@ end run
 export function readClipboardImage(): Buffer | null {
   const platform = detectPlatform();
   switch (platform) {
-    case 'wsl':
     case 'windows':
       return readViaPowerShell();
+    case 'wsl':
+      return readViaWsl();
     case 'macos':
       return readViaMac();
     case 'linux':
@@ -225,14 +328,20 @@ export function pngDimensions(buf: Buffer): { width: number; height: number } | 
 function resizeViaTool(buf: Buffer, w: number, h: number): Buffer {
   const platform = detectPlatform();
   if (platform === 'wsl' || platform === 'windows') {
-    const script = PS_RESIZE.replace(/__W__/g, String(w)).replace(/__H__/g, String(h));
-    const b64 = execFileSync('powershell.exe', [
-      '-NoLogo', '-NoProfile', '-NonInteractive', '-Command', script,
-    ], { input: buf.toString('base64'), encoding: 'utf8', timeout: TIMEOUT, maxBuffer: MAX_BUFFER, stdio: ['pipe', 'pipe', 'ignore'] }).trim();
-    return Buffer.from(b64, 'base64');
+    try {
+      const script = PS_RESIZE.replace(/__W__/g, String(w)).replace(/__H__/g, String(h));
+      const b64 = execFileSync('powershell.exe', [
+        '-NoLogo', '-NoProfile', '-NonInteractive', '-Command', script,
+      ], { input: buf.toString('base64'), encoding: 'utf8', timeout: TIMEOUT, maxBuffer: MAX_BUFFER, stdio: ['pipe', 'pipe', 'ignore'] }).trim();
+      return Buffer.from(b64, 'base64');
+    } catch (err) {
+      // Native Windows has no other backend; on WSL, interop may be down (the
+      // same reason capture falls back to WSLg) — drop to ImageMagick below.
+      if (platform === 'windows') throw err;
+    }
   }
 
-  // macOS / Linux: stream PNG through ImageMagick (stdin -> stdout, no temp files).
+  // macOS / Linux / WSL-with-interop-down: stream PNG through ImageMagick (stdin -> stdout, no temp files).
   for (const bin of ['magick', 'convert']) {
     try {
       return execFileSync(bin, ['png:-', '-resize', `${w}x${h}`, 'png:-'], {
@@ -321,6 +430,11 @@ function pruneOldImages(outputDir: string): void {
   } catch { /* dir not readable yet */ }
 }
 
+/** Short content hash (first 16 hex of sha256) — used to name and dedupe images. */
+export function shortHash(buf: Buffer): string {
+  return createHash('sha256').update(buf).digest('hex').slice(0, 16);
+}
+
 /**
  * Save image bytes to `outputDir`, named by a short content hash. Re-saving
  * identical bytes is skipped. Returns the absolute file path.
@@ -329,7 +443,7 @@ export function saveImage(buf: Buffer, outputDir: string = DEFAULT_OUTPUT_DIR): 
   mkdirSync(outputDir, { recursive: true });
   pruneOldImages(outputDir);
 
-  const hash = createHash('sha256').update(buf).digest('hex').slice(0, 16);
+  const hash = shortHash(buf);
   const filePath = join(outputDir, `${hash}.png`);
 
   if (!existsSync(filePath)) {

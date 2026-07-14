@@ -39,7 +39,24 @@ npm install -g clipboard-image-terminal
 claude "look at $(clipimg)"   # copy an image first, then run this
 ```
 
-`clipimg` prints just the saved path to stdout (pipe-friendly). Useful flags: `-d ./shots` (custom dir), `-q` (path only), `help`.
+`clipimg` prints the saved path to stdout (pipe-friendly) and a colorful `[img #n]` line to stderr. Useful flags: `-d ./shots` (custom dir), `-q` (path only).
+
+> **Optional background watcher.** Bare `clipimg` captures once. To auto-save
+> every new clipboard image in the background, run `clipimg watch` (and `clipimg
+> stop` to end it); its captures show up in `clipimg logs` as `[img #n]` lines.
+
+### 📦 Commands
+
+| Command | What it does |
+|---|---|
+| `clipimg` *(alias `paste`, `grab`)* | Capture the clipboard image and print its path (with an `[img #n]` line) |
+| `clipimg watch` | Start a background watcher that auto-saves each new clipboard image |
+| `clipimg stop` | Stop the background watcher |
+| `clipimg status` *(alias `ls`)* | Show watcher state + the store: count, total size, and each image's dimensions, size, age, tokens, a thumbnail where supported, and a clickable `file://` link |
+| `clipimg logs` | Show the watcher's activity log, colorized (the on-disk log stays plain) |
+| `clipimg clear` *(alias `clean`)* | Delete every saved image and reset the `[img #n]` counter |
+| `clipimg doctor` *(alias `deps`)* | Check the clipboard tools your platform needs, with install hints for anything missing |
+| `clipimg help` | Show the full help screen |
 
 **VS Code extension** — for working inside the editor:
 
@@ -55,7 +72,8 @@ Focus the terminal and press **`Ctrl+Alt+V`** (or right-click → **Paste Clipbo
 - **Staged feedback & inline preview** — the CLI shows each step as it works (`◇ reading → ❖ compressing → ▸ saving`), an `[img #n]` summary, and a small inline thumbnail in terminals that support it (VS Code, iTerm2, WezTerm); the extension mirrors it with a progress notification and status-bar badge
 - **Lossless PNG** — keeps screenshots of code & text crisp for vision models
 - **Cross-platform** — WSL/Windows, macOS, and Linux, each via its native clipboard tool
-- **Pipeable** — the CLI prints just the path to stdout, perfect for `$(clipimg)`
+- **Background watcher or one-shot** — run bare `clipimg` to auto-save clipboard images in the background, or `clipimg paste` for a single capture
+- **Pipeable** — `clipimg paste` prints just the path to stdout, perfect for `$(clipimg paste)`
 - **De-duplicated** — images are named by content hash, so re-pasting the same image is a no-op
 - **Self-cleaning** — saved images older than 7 days are pruned automatically
 - **Configurable output directory** — `-d` flag (CLI) or a VS Code setting
@@ -90,9 +108,25 @@ Node.js ≥ 20 (CLI only), plus a clipboard tool for your platform:
 | **macOS** | `osascript` (built-in), or [`pngpaste`](https://github.com/jcsalterego/pngpaste) |
 | **Linux** | `wl-clipboard` (Wayland) or `xclip` (X11) |
 
+On **WSL**, if Windows interop is broken (`.exe`s fail with "exec format error"),
+clipimg falls back to reading the clipboard through **WSLg** — install
+`wl-clipboard` (or `xclip`) and it keeps working without an interop fix. `clipimg
+doctor` shows which path is active.
+
 Compression uses each platform's native resizer — PowerShell on WSL/Windows, the
 built-in `sips` (or ImageMagick) on macOS, ImageMagick on Linux. If none is
 available, the image is still pasted at full size; only the token saving is skipped.
+
+**Why the extra tool on Linux (and sometimes macOS)?** Node has no built-in way
+to read image bytes from the clipboard, so `clipimg` shells out to the OS. On
+Windows/WSL that's PowerShell + .NET (always present) and on macOS it's the
+built-in `osascript` — neither needs anything installed. Linux has *no* standard
+clipboard API; the reader is display-server-specific (`wl-paste` for Wayland,
+`xclip` for X11), and those aren't preinstalled on most distros. `clipimg`
+**does not auto-install** system packages — that needs root and differs per
+distro, which is a footgun for an npm/VS Code package — so instead it detects
+what's missing and tells you exactly what to install. Run `clipimg doctor` to see
+the status for your machine.
 
 ## 🛠️ Development
 
