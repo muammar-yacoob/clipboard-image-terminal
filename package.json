@@ -57,6 +57,11 @@
     "keybindings": [
       {
         "command": "clipboard-image.paste",
+        "key": "ctrl+v",
+        "when": "terminalFocus"
+      },
+      {
+        "command": "clipboard-image.paste",
         "key": "ctrl+alt+v",
         "when": "terminalFocus"
       }

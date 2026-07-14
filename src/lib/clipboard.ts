@@ -17,7 +17,7 @@ import {
   readdirSync, statSync, unlinkSync,
 } from 'node:fs';
 import { join } from 'node:path';
-import { tmpdir } from 'node:os';
+import { tmpdir, homedir } from 'node:os';
 
 import { estimateImageTokens, PATCH_PX } from './format';
 
@@ -146,6 +146,17 @@ function ensureWslgDisplayEnv(): boolean {
   return Boolean(process.env.WAYLAND_DISPLAY || process.env.DISPLAY);
 }
 
+// The VS Code extension host (and other non-login parents) can start with a
+// minimal PATH that omits ~/.local/bin — where wl-clipboard is commonly installed
+// — so execFileSync('wl-paste') would ENOENT even though the tool is present.
+// Add the usual bin dirs so the fallback readers resolve.
+function ensureToolPath(): void {
+  const extra = [join(homedir(), '.local/bin'), '/usr/local/bin', '/usr/bin', '/bin'];
+  const parts = (process.env.PATH || '').split(':');
+  const missing = extra.filter((d) => !parts.includes(d));
+  if (missing.length) process.env.PATH = [...parts, ...missing].filter(Boolean).join(':');
+}
+
 // On WSL, prefer PowerShell but fall back to WSLg's bridged clipboard when it
 // can't run (Windows interop down → "exec format error"). wl-paste/xclip read
 // the Windows clipboard through WSLg without any interop.
@@ -154,6 +165,7 @@ function readViaWsl(): Buffer | null {
     return readViaPowerShell();
   } catch (psErr) {
     if (ensureWslgDisplayEnv()) {
+      ensureToolPath();
       return readViaLinux(); // WSLg fallback; its own error is the actionable one here
     }
     throw psErr;

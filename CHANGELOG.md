@@ -5,7 +5,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Changed
+- **VS Code: `Ctrl+V` in the terminal now pastes clipboard images as paths** — the
+  paste command is bound to `Ctrl+V` (the natural keystroke) in addition to
+  `Ctrl+Alt+V`. When the clipboard holds text rather than an image, it falls
+  through to the normal terminal paste, so ordinary pastes are unaffected. This
+  is what makes copy-image → `Ctrl+V` land a usable path in a terminal AI tool
+  (e.g. Claude Code) instead of an image the tool can't read on WSL.
+
 ### Fixed
+- **VS Code extension host couldn't find `wl-clipboard`** — the extension host can
+  start with a minimal `PATH` that omits `~/.local/bin`, so `wl-paste`/`xclip`
+  failed to resolve. The WSL fallback now adds the usual bin dirs before shelling
+  out.
 - **WSLg fallback now works in non-login contexts** — when Windows interop is
   down, capture fell back to WSLg's `wl-paste`/`xclip` only if `WAYLAND_DISPLAY`
   or `DISPLAY` was already set. A login shell has them, but the VS Code extension
